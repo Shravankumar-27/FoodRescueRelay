@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 from app.models.enums import DietaryType, HandlingType
 
@@ -38,6 +38,16 @@ class RescueCreate(BaseModel):
     longitude: float | None = None
     locality: str | None = Field(default=None, max_length=200)
     private_address: str | None = Field(default=None, max_length=300)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _remap_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "handling_type" not in data and "holding_condition" in data:
+                data["handling_type"] = data["holding_condition"]
+            if "handling_notes" not in data and "notes" in data:
+                data["handling_notes"] = data["notes"]
+        return data
 
     @field_validator("latitude")
     @classmethod

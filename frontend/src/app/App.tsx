@@ -2,8 +2,10 @@ import { useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "../features/auth/AuthContext";
+import { ToastProvider } from "../features/toast/ToastContext";
 import Skeleton from "../components/ui/Skeleton";
 import RequireRole from "./RequireRole";
+import LandingPage from "../pages/LandingPage";
 import LoginPage from "../pages/LoginPage";
 import DonorHomePage from "../pages/donor/DonorHomePage";
 import CreateRescuePage from "../pages/donor/CreateRescuePage";
@@ -22,7 +24,11 @@ function RoleHome() {
   const { user, isReady } = useAuth();
 
   if (!isReady) {
-    return <Skeleton className="m-4 h-24" />;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Skeleton className="h-24 w-64" />
+      </div>
+    );
   }
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -49,113 +55,120 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<RoleHome />} />
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/home" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<RoleHome />} />
 
-            <Route
-              path="/donor"
-              element={
-                <RequireRole roles={["DONOR"]}>
-                  <DonorHomePage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/donor/rescue/new"
-              element={
-                <RequireRole roles={["DONOR"]}>
-                  <CreateRescuePage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/donor/rescue/:id"
-              element={
-                <RequireRole roles={["DONOR"]}>
-                  <ActiveRescuePage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/donor/rescues"
-              element={
-                <RequireRole roles={["DONOR"]}>
-                  <RescueHistoryPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/donor/impact"
-              element={
-                <RequireRole roles={["DONOR"]}>
-                  <DonorImpactPage />
-                </RequireRole>
-              }
-            />
+              {/* Donor routes */}
+              <Route
+                path="/donor"
+                element={
+                  <RequireRole roles={["DONOR"]}>
+                    <DonorHomePage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/donor/rescue/new"
+                element={
+                  <RequireRole roles={["DONOR"]}>
+                    <CreateRescuePage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/donor/rescue/:id"
+                element={
+                  <RequireRole roles={["DONOR"]}>
+                    <ActiveRescuePage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/donor/rescues"
+                element={
+                  <RequireRole roles={["DONOR"]}>
+                    <RescueHistoryPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/donor/impact"
+                element={
+                  <RequireRole roles={["DONOR"]}>
+                    <DonorImpactPage />
+                  </RequireRole>
+                }
+              />
 
-            <Route
-              path="/receiver"
-              element={
-                <RequireRole roles={["RECEIVER"]}>
-                  <ReceiverHomePage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/receiver/pickup/:rescueId"
-              element={
-                <RequireRole roles={["RECEIVER"]}>
-                  <ActivePickupPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/receiver/capacity"
-              element={
-                <RequireRole roles={["RECEIVER"]}>
-                  <CapacitySettingsPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/receiver/history"
-              element={
-                <RequireRole roles={["RECEIVER"]}>
-                  <ReceiverHistoryPage />
-                </RequireRole>
-              }
-            />
+              {/* Receiver routes */}
+              <Route
+                path="/receiver"
+                element={
+                  <RequireRole roles={["RECEIVER"]}>
+                    <ReceiverHomePage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/receiver/pickup/:rescueId"
+                element={
+                  <RequireRole roles={["RECEIVER"]}>
+                    <ActivePickupPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/receiver/capacity"
+                element={
+                  <RequireRole roles={["RECEIVER"]}>
+                    <CapacitySettingsPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/receiver/history"
+                element={
+                  <RequireRole roles={["RECEIVER"]}>
+                    <ReceiverHistoryPage />
+                  </RequireRole>
+                }
+              />
 
-            <Route
-              path="/admin"
-              element={
-                <RequireRole roles={["ADMIN"]}>
-                  <AdminOverviewPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/admin/organizations"
-              element={
-                <RequireRole roles={["ADMIN"]}>
-                  <AdminOrganizationsPage />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/admin/rescues"
-              element={
-                <RequireRole roles={["ADMIN"]}>
-                  <AdminRescuesPage />
-                </RequireRole>
-              }
-            />
+              {/* Admin routes */}
+              <Route
+                path="/admin"
+                element={
+                  <RequireRole roles={["ADMIN"]}>
+                    <AdminOverviewPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/admin/organizations"
+                element={
+                  <RequireRole roles={["ADMIN"]}>
+                    <AdminOrganizationsPage />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/admin/rescues"
+                element={
+                  <RequireRole roles={["ADMIN"]}>
+                    <AdminRescuesPage />
+                  </RequireRole>
+                }
+              />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

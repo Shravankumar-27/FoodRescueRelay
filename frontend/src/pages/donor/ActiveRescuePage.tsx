@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { Copy, CheckCircle2, Repeat2, AlertCircle, Flame, Leaf, Snowflake, Thermometer } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import MatchExplanation from "../../components/rescue/MatchExplanation";
 import RescueClock from "../../components/rescue/RescueClock";
@@ -12,6 +13,7 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
+import { useToast } from "../../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../../lib/api";
 import { formatMinutes, statusLabel } from "../../lib/format";
 import { pollInterval } from "../../hooks/usePolling";
@@ -22,11 +24,27 @@ const CANCELLABLE = ["POSTED", "MATCHING", "OFFERED"];
 const RETRY_AFTER_MS = 2 * 60 * 1000;
 
 const DIETARY_LABELS: Record<string, string> = {
-  VEG: "Vegetarian",
-  NON_VEG: "Non-vegetarian",
-  VEGAN: "Vegan",
+  VEG: "🥦 Vegetarian",
+  NON_VEG: "🍗 Non-vegetarian",
+  VEGAN: "🌱 Vegan",
   OTHER: "Other",
   UNKNOWN: "Unknown",
+};
+
+const HANDLING_ICONS: Record<string, React.ReactNode> = {
+  HOT_HELD: <Flame className="h-4 w-4 text-urgent" />,
+  REFRIGERATED: <Snowflake className="h-4 w-4 text-info" />,
+  ROOM_TEMPERATURE: <Thermometer className="h-4 w-4 text-warn" />,
+  OTHER: <Leaf className="h-4 w-4 text-muted" />,
+  UNKNOWN: <AlertCircle className="h-4 w-4 text-muted" />,
+};
+
+const HANDLING_LABELS: Record<string, string> = {
+  HOT_HELD: "Kept hot (above 60 °C)",
+  REFRIGERATED: "Refrigerated (below 5 °C)",
+  ROOM_TEMPERATURE: "Room temperature — consume within 2 hrs",
+  OTHER: "Other (see notes)",
+  UNKNOWN: "Not specified",
 };
 
 function errorText(e: unknown): string {
@@ -43,6 +61,7 @@ type DetailWithFlags = RescueDetail & { matching_error?: boolean };
 export default function ActiveRescuePage() {
   const { id = "" } = useParams();
   const { token } = useAuth();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -84,7 +103,10 @@ export default function ActiveRescuePage() {
   const cancel = useMutation({
     mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/cancel`, { method: "POST", token }),
     onMutate: () => setActionError(null),
-    onSuccess: onRescueUpdated,
+    onSuccess: (data) => {
+      onRescueUpdated(data);
+      toast({ variant: "info", title: "Rescue cancelled", message: "No receivers will be notified." });
+    },
     onError: (e) => setActionError(errorText(e)),
   });
 
@@ -99,6 +121,7 @@ export default function ActiveRescuePage() {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast({ variant: "success", title: "Code copied!", message: "Share it with the receiver." });
     } catch {
       setActionError("Couldn't copy the code. Please select it and copy it manually.");
     }
@@ -109,14 +132,24 @@ export default function ActiveRescuePage() {
   const postedTooLong =
     status === "POSTED" && !!createdAt && Date.now() - new Date(createdAt).getTime() > RETRY_AFTER_MS;
   const needsRetry = matchable && (flagged || postedTooLong);
-
   const statusLine = d ? `Status: ${statusLabel(d.status)}` : "";
 
+  // Urgency colour for the top bar
+  const isUrgent = d && ["POSTED", "MATCHING", "OFFERED"].includes(d.status);
+  const minsLeft = d ? Math.round((new Date(d.pickup_by).getTime() - Date.now()) / 60000) : 0;
+  const urgencyBarColor =
+    minsLeft > 60 ? "bg-fresh" : minsLeft > 20 ? "bg-warn" : "bg-urgent";
+
   return (
-    <AppShell title="Rescue" nav="donor">
+    <AppShell title="Rescue" nav="donor" backTo="/donor">
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
+        {/* Urgency colour bar */}
+        {isUrgent && d && (
+          <div className={`h-1.5 w-full rounded-full ${urgencyBarColor}`} role="presentation" />
+        )}
+
         {offline && (
-          <div role="status" className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-amber-900">
+          <div role="status" className="rounded-xl border border-warn/30 bg-warn/5 p-4 text-warn">
             You're offline. Your latest data may be outdated.
           </div>
         )}
@@ -129,7 +162,7 @@ export default function ActiveRescuePage() {
         )}
 
         {rescue.isError && !offline && (
-          <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800">
+          <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
             {errorText(rescue.error)}
           </div>
         )}
@@ -140,25 +173,27 @@ export default function ActiveRescuePage() {
               {statusLine}
             </div>
 
+            {/* Header card */}
             <Card>
               <div className="flex flex-col items-start gap-3">
                 <div className="flex w-full flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-xl font-semibold text-gray-900">{d.display_id}</h2>
+                  <h2 className="text-xl font-bold text-ink">{d.display_id}</h2>
                   <StatusBadge status={d.status} />
                 </div>
                 <RescueClock pickupBy={d.pickup_by} />
               </div>
             </Card>
 
+            {/* Food details */}
             <Card>
-              <h3 className="mb-3 text-lg font-semibold text-gray-900">Food</h3>
+              <h3 className="mb-3 text-lg font-semibold text-ink">Food</h3>
               <ul className="flex flex-col gap-3">
                 {d.food_items.map((f, i) => (
-                  <li key={i} className="border-b border-gray-100 pb-3 last:border-0">
-                    <p className="font-medium text-gray-900">
-                      {f.name} <span className="text-gray-600">· {f.quantity_servings} servings</span>
+                  <li key={i} className="border-b border-border pb-3 last:border-0">
+                    <p className="font-medium text-ink">
+                      {f.name} <span className="text-muted">· {f.quantity_servings} servings</span>
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted mt-0.5">
                       {DIETARY_LABELS[f.dietary_type] ?? f.dietary_type}
                       {" · "}
                       {f.allergen_info_unknown
@@ -170,58 +205,78 @@ export default function ActiveRescuePage() {
                   </li>
                 ))}
               </ul>
-              {d.allergen_notice && <p className="mt-3 text-sm text-gray-800">{d.allergen_notice}</p>}
-              {d.safety_notice && <p className="mt-3 text-sm text-gray-800">{d.safety_notice}</p>}
+
+              {/* Handling info */}
+              {(d.handling_type || d.handling_notes) && (
+                <div className="mt-4 flex flex-col gap-1 rounded-xl bg-background p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">Handling</p>
+                  {d.handling_type && (
+                    <p className="flex items-center gap-2 text-sm text-ink">
+                      {HANDLING_ICONS[d.handling_type] ?? null}
+                      {HANDLING_LABELS[d.handling_type] ?? d.handling_type}
+                    </p>
+                  )}
+                  {d.handling_notes && (
+                    <p className="text-sm text-muted mt-1">{d.handling_notes}</p>
+                  )}
+                </div>
+              )}
+
+              {d.allergen_notice && <p className="mt-3 text-sm text-ink">{d.allergen_notice}</p>}
+              {d.safety_notice && <p className="mt-2 text-xs text-muted italic">{d.safety_notice}</p>}
             </Card>
 
+            {/* Pickup code */}
             {(d.status === "CLAIMED" || d.status === "COLLECTED") && (
-              <Card>
-                <h3 className="text-lg font-semibold text-gray-900">Pickup code</h3>
+              <Card variant="fresh">
+                <h3 className="text-lg font-semibold text-ink">Pickup code</h3>
                 {d.pickup_code ? (
                   <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <p className="font-mono text-3xl font-bold tracking-widest text-gray-900" aria-label="Pickup code">
+                    <p className="font-mono text-3xl font-black tracking-widest text-ink" aria-label="Pickup code">
                       {d.pickup_code}
                     </p>
                     <Button
                       variant="secondary"
-                      className="min-h-[44px]"
+                      className="min-h-[44px] flex items-center gap-2"
                       onClick={() => copyCode(d.pickup_code as string)}
                     >
-                      Copy code
+                      {copied ? <CheckCircle2 className="h-4 w-4 text-fresh" /> : <Copy className="h-4 w-4" />}
+                      {copied ? "Copied!" : "Copy code"}
                     </Button>
-                    {copied && <span className="text-sm text-emerald-800">Copied</span>}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-600">The pickup code isn't available yet.</p>
+                  <p className="text-sm text-muted mt-1">The pickup code isn't available yet.</p>
                 )}
                 {d.claimed_receiver && (
-                  <p className="mt-3 text-sm text-gray-800">
-                    Claimed by <span className="font-medium">{d.claimed_receiver.name}</span>
+                  <p className="mt-3 text-sm text-ink">
+                    Claimed by{" "}
+                    <span className="font-semibold">{d.claimed_receiver.name}</span>
                     {d.claimed_receiver.locality ? `, ${d.claimed_receiver.locality}` : ""}
                   </p>
                 )}
               </Card>
             )}
 
+            {/* Matching */}
             {matchable && (
               <Card>
-                <h3 className="mb-3 text-lg font-semibold text-gray-900">Matching</h3>
+                <h3 className="mb-3 text-lg font-semibold text-ink">Matching</h3>
                 {matches.isLoading && <Skeleton className="h-24 w-full" />}
                 {matches.isError && (
-                  <p role="alert" className="text-sm text-red-700">
+                  <p role="alert" className="text-sm text-urgent">
                     {errorText(matches.error)}
                   </p>
                 )}
                 {matches.data && <MatchExplanation candidates={matches.data} />}
                 {d.status === "MATCHING" && matches.data && matches.data.length === 0 && (
-                  <p className="text-sm text-gray-800">
-                    No currently available receiver can safely reach this rescue before the pickup deadline. We'll
-                    continue checking while the rescue remains active.
+                  <p className="text-sm text-muted">
+                    No currently available receiver can safely reach this rescue before the pickup deadline.
+                    We'll continue checking while the rescue remains active.
                   </p>
                 )}
                 {needsRetry && (
                   <div className="mt-3 flex flex-col gap-3">
-                    <p className="text-sm text-gray-800">
+                    <p className="text-sm text-muted">
                       We couldn't complete matching right now. Your rescue has been saved.
                     </p>
                     <Button
@@ -237,59 +292,101 @@ export default function ActiveRescuePage() {
               </Card>
             )}
 
+            {/* Expired / cancelled states */}
             {d.status === "EXPIRED" && (
-              <Card>
-                <p className="text-gray-800">
-                  Pickup window ended. This rescue will no longer be offered to receivers.
+              <Card variant="warn">
+                <p className="font-semibold text-warn">Pickup window ended</p>
+                <p className="text-sm text-muted mt-1">
+                  This rescue will no longer be offered to receivers.
                 </p>
+                <Link
+                  to="/donor/rescue/new"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
+                >
+                  <Repeat2 className="h-4 w-4" /> Post again
+                </Link>
               </Card>
             )}
 
             {d.status === "CANCELLED" && (
               <Card>
-                <p className="text-gray-800">This rescue was cancelled. No receiver will collect this food.</p>
+                <p className="text-muted">This rescue was cancelled. No receiver will collect this food.</p>
+                <Link
+                  to="/donor/rescue/new"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
+                >
+                  <Repeat2 className="h-4 w-4" /> Post a new rescue
+                </Link>
               </Card>
             )}
 
+            {/* Impact */}
             {d.status === "DELIVERED" && (
               <section aria-labelledby="impact-heading" className="flex flex-col gap-4">
-                <h3 id="impact-heading" className="text-lg font-semibold text-gray-900">
-                  Impact
+                <h3 id="impact-heading" className="text-lg font-semibold text-ink">
+                  🎉 Impact
                 </h3>
-                <ImpactMetric label="Meals rescued" value={`${d.impact?.delivered_servings ?? 0} meals rescued`} />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ImpactMetric label="Rejected" value={String(d.impact?.rejected_servings ?? 0)} />
-                  <ImpactMetric
-                    label="Completion time"
-                    value={
-                      d.impact?.minutes_to_delivery !== undefined && d.impact?.minutes_to_delivery !== null
-                        ? formatMinutes(d.impact.minutes_to_delivery)
-                        : "—"
-                    }
-                  />
+                <div className="rounded-2xl bg-fresh/10 border border-fresh/20 p-4">
+                  <ImpactMetric label="Meals rescued" value={`${d.impact?.delivered_servings ?? 0} meals`} />
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <ImpactMetric label="Rejected servings" value={String(d.impact?.rejected_servings ?? 0)} />
+                    <ImpactMetric
+                      label="Completion time"
+                      value={
+                        d.impact?.minutes_to_delivery !== undefined && d.impact?.minutes_to_delivery !== null
+                          ? formatMinutes(d.impact.minutes_to_delivery)
+                          : "—"
+                      }
+                    />
+                  </div>
+                  {/* CO2e estimate */}
+                  {d.impact?.delivered_servings && d.impact.delivered_servings > 0 && (
+                    <div className="mt-3 rounded-xl bg-background p-3 text-sm">
+                      <p className="font-semibold text-ink">
+                        ~{(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided
+                      </p>
+                      <p className="text-xs text-muted mt-0.5">
+                        Estimate: {d.impact.delivered_servings} meals × 0.4 kg/meal × 2.5 kgCO₂e/kg food waste
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <HowWeCalculate />
               </section>
             )}
 
+            {/* Cancel */}
             {cancellable && (
               <div className="flex flex-col gap-2">
-                <Button variant="secondary" className="min-h-[44px] self-start" onClick={onCancel} disabled={cancel.isPending}>
+                <Button
+                  variant="secondary"
+                  className="min-h-[44px] self-start text-muted hover:text-urgent"
+                  onClick={onCancel}
+                  disabled={cancel.isPending}
+                >
                   {cancel.isPending ? "Cancelling..." : "Cancel rescue"}
                 </Button>
               </div>
             )}
 
             {actionError && (
-              <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800">
+              <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
                 {actionError}
               </div>
             )}
 
+            {/* Timeline */}
             <Card>
-              <h3 className="mb-3 text-lg font-semibold text-gray-900">Timeline</h3>
+              <h3 className="mb-4 text-lg font-semibold text-ink">Timeline</h3>
               <StatusTimeline events={d.status_events ?? []} status={d.status} />
             </Card>
+
+            {/* Safety disclaimer */}
+            <div className="rounded-xl border border-border bg-background p-3 text-xs text-muted">
+              <strong>Handling information provided by donor.</strong> Receiver must independently verify
+              suitability before accepting or distributing the food. RescueRelay coordinates food recovery
+              and does not certify food safety.
+            </div>
           </>
         )}
       </div>

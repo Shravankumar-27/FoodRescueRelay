@@ -4,12 +4,19 @@ import type { ApiSuccess } from "../types/api";
 export class ApiError extends Error {
   code: string;
   status: number;
+  details?: Array<{ field?: string; message?: string }>;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    details?: Array<{ field?: string; message?: string }>,
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -21,7 +28,11 @@ interface RequestOptions {
 
 interface ErrorEnvelope {
   success?: boolean;
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Array<{ field?: string; message?: string }>;
+  };
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
@@ -57,6 +68,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       envelope?.error?.code ?? "HTTP_ERROR",
       envelope?.error?.message ?? "Something went wrong. Please try again.",
       res.status,
+      envelope?.error?.details,
     );
   }
 
