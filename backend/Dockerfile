@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini pytest.ini ./
+COPY tests ./tests
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "alembic upgrade head && python -m app.seed.init_db && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
