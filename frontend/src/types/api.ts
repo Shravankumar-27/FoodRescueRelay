@@ -18,6 +18,8 @@ export interface OrganizationOut {
   name: string;
   organization_type: string;
   verification_status: string;
+  trust_score?: number;
+  rank_badge?: string;
 }
 
 export interface LoginData {
@@ -46,6 +48,7 @@ export interface FoodItem {
   name: string;
   quantity_servings: number;
   dietary_type: string;
+  food_category?: string;
   allergens: string[];
   allergen_info_unknown: boolean;
 }
@@ -77,6 +80,7 @@ export interface StatusEvent {
 }
 
 export interface RescueDetail {
+  collected_servings?: number | null;
   id: string;
   display_id: string;
   status: RescueStatus;
@@ -146,6 +150,11 @@ export interface MatchCandidate {
 }
 
 export interface OfferAvailable {
+  donor_name: string;
+  donor_id: string;
+  rank_badge: string;
+  trust_score: number;
+  factors: Record<string, number>;
   id: string;
   rescue_id: string;
   rescue_display_id: string;
@@ -165,9 +174,16 @@ export interface OfferAvailable {
   estimated_travel_minutes: number;
   why: string[];
   safety_notice: string;
+  is_direct_offer?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface CapacityData {
+  accepted_dietary_types?: string[];
+  accepted_food_categories?: string[];
+  excluded_allergens?: string[];
+  description?: string;
   available: boolean;
   max_servings: number;
   available_servings: number;
@@ -179,6 +195,11 @@ export interface CapacityData {
 }
 
 export interface ImpactSummary {
+  weekly: { week: string; meals: number; co2e_kg: number }[];
+  food_kg_estimate: number;
+  co2e_kg_estimate: number;
+  household_meal_equivalents: number;
+  assumptions: string;
   meals_rescued_month: number;
   total_meals_rescued: number;
   completed_rescues: number;
@@ -211,4 +232,75 @@ export interface AdminRescue {
   total_servings: number;
   pickup_by: string;
   created_at: string;
+}
+
+export interface NearbyReceiver {
+  accepted_dietary_types: string[];
+  accepted_food_categories: string[];
+  description: string;
+  rating: number | null;
+  rating_count: number;
+  id: string;
+  name: string;
+  locality: string;
+  latitude: number;
+  longitude: number;
+  organization_type: string;
+  verification_status: string;
+  reliability: number;
+  trust_score: number;
+  rank_badge: string;
+  distance_km: number;
+  available: boolean;
+  max_servings: number;
+  available_servings: number;
+  need_level: string;
+  transport_available: boolean;
+  accepts_veg: boolean;
+  accepts_non_veg: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender_name: string;
+  sender_role: string;
+  message: string;
+  is_suggested: boolean;
+  created_at: string;
+}
+
+export interface ChatData {
+  partner_name?: string;
+  messages: ChatMessage[];
+  suggested: string[];
+}
+
+export interface LeaderboardEntry {
+  trust_score: number;
+  rating: number | null;
+  rating_count: number;
+  completion_rate: number | null;
+  rank: number;
+  name: string;
+  locality: string;
+  rescues: number;
+  meals: number;
+  reliability: number;
+  badge: string;
+}
+
+export interface LeaderboardData {
+  donors: LeaderboardEntry[];
+  receivers: LeaderboardEntry[];
+}
+
+export interface PlatformStats {
+  total_rescues: number;
+  delivered: number;
+  active: number;
+  total_meals: number;
+  total_orgs: number;
+  co2e_kg: number;
+  water_saved_liters: number;
+  families_fed_estimate: number;
 }

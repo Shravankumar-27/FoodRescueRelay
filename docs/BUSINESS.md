@@ -1,59 +1,41 @@
-# RescueRelay: business notes
+﻿# RescueRelay business case
 
-**All financial figures in this document are hypotheses. None has been validated with customers, sponsors or payment data.** They are working assumptions to test, not forecasts or quotes.
+All prices, savings and pilot targets below are hypotheses, not validated revenue or customer commitments. The application does not collect payments.
 
-## Problem and target customer
+## Start with one repeatable use case
 
-Surplus cooked food is a daily cost for multi-event caterers and banquet operations, and receivers such as community kitchens, NGOs and shelters often cannot find it fast enough. Today the handoff runs on phone calls and group messages, and nobody records what was delivered.
+Start with event caterers in Madhapur, Hyderabad, supplying nearby community kitchens and shelters. A caterer finishing an event needs a quick listing, a receiver with enough capacity, a pickup deadline and proof of handoff. Repeated weekly use comes from fewer coordination calls, reusable food details and a reliable delivery record. All organizations and locations in this demo are synthetic.
 
-Primary target customers (hypotheses to test):
+## Who pays
 
-- **Multi-event caterers** who serve several events a week and produce surplus regularly.
-- **Banquet chains** with several halls, where surplus is generated per location.
-- **Venue operators** who host events and want a documented, routine way to handle what is left over.
+Keep posting, matching, receiving, chat, pickup tracking and basic impact exports free. Receivers should not pay per donated meal. Charging them would make the time-sensitive collection decision harder.
 
-Primary receivers (the other side of the marketplace, not the payer): community kitchens, NGOs and shelters in Hyderabad, the initial city.
+Test a donor subscription at **INR 999 per location per month** after demonstrating operational savings. The paid proposition would be recurring schedules, staff handoff tools, consolidated reporting and waste analytics. These premium features are proposals, not active subscriptions. Basic CSV exports and repeat-last-listing already exist and remain free.
 
-## Core workflow: free for rescue
+CSR sponsors or city programmes can fund collection capacity and neighbourhood coverage. Sell an auditable report of confirmed outcomes and agreed operational service levels; never sell match priority, a trust badge, guaranteed food safety, carbon credits, or tax benefits.
 
-The core rescue workflow is free for donors and receivers. A donor posts a rescue, the platform ranks receivers, an offer goes out with a 120-second response window, a receiver claims it, and the handoff and delivery are recorded.
+## A measurable value proposition
 
-Keeping the core free is deliberate. A donor who must pay before the first rescue is unlikely to adopt the platform, and the impact record depends on receivers using it.
+At 12 rescues per month, 20 minutes saved per rescue and INR 300/hour staff cost, coordination savings would be INR 1,200/month. At these assumptions, approximately 10 rescues/month would cover INR 999. These are calculator inputs, not observed savings; pickup transport and platform operating costs are separate.
 
-## Pilot pricing hypothesis
+The pricing page lets a donor change these inputs. A low-frequency donor should stay on the free plan. A receiver's strongest benefits are predictable volume, clear allergen information and fewer unsuccessful collection trips, rather than a paid dashboard.
 
-Pilot pricing hypothesis: ₹1,999/month per organization
+## Four-week validation pilot
 
-This is a single hypothesis about what a multi-location caterer or venue operator might pay for paid features. It has not been tested with any customer, and it may be wrong in either direction.
+1. Interview 10 caterers and five receivers about current calls, timing, transport and failed pickups. Do not assume surplus is available daily.
+2. Establish baseline coordination minutes and transport expense, then record posting time, claim time, collected quantity, delivered quantity, cancellations and expiry.
+3. Review weekly repeat use and completion before the deadline. Count only confirmed delivered servings as meals saved; report rejected or expired quantities separately.
+4. Ask frequent donors for a paid pilot commitment only after showing their measured savings. Ask sponsors whether they would fund transport or reporting, and what evidence they need.
+5. Calculate contribution per location: subscription plus contracted sponsorship minus payment fees, support, hosting and any subsidized logistics. Do not expand until operating cost and receiver capacity are understood.
 
-Candidate paid features (not built as paywalls yet):
+The initial product target is a complete donor post in under one minute; usability testing with actual caterers is still needed to validate that target.
 
-- **Multi-location reporting:** rolled-up impact and rescue figures across several sites under one organization.
-- **Impact reports:** exportable summaries for an organization's own records or for a sponsor.
-- **Organization analytics:** completion rates, time from posting to delivery, and which receivers respond fastest.
-- **Event templates:** saved food-item lists and handling settings for recurring events.
-- **Priority support:** a faster response channel for operational problems during events.
+## Market context and impact claims
 
-The current codebase has the impact summary (`GET /api/v1/impact/summary`) and the completion figures it returns. It does not have multi-location reporting, exports, analytics, templates or support tooling.
+[Too Good To Go's platform](https://www.toogoodtogo.com/en-gb/platform) demonstrates how surplus management can create operational value. [FoodCloud's receiver programme](https://www.food.cloud/get-food) provides a relevant example of low/no-cost access for community organizations. These examples inform the payer model; neither validates our price or demand.
 
-## CSR sponsors as secondary payer
+[EPA's Wasted Food Scale](https://www.epa.gov/sustainable-management-food/wasted-food-scale) supports prioritizing prevention and donation. It is not a source for the demo's numeric emission multiplier. The application explicitly labels 0.4 kg per serving and 2.5 kg CO2e per kg as illustrative assumptions, exposes the arithmetic and avoids claiming measured emissions or unique people fed.
 
-A hypothesis: corporate social responsibility (CSR) budgets may fund rescues or impact reporting, so that sponsors pay where the donor does not. Sponsors would be a **secondary payer**, buying impact reports or sponsoring a receiver's capacity, rather than funding the core rescue flow.
+## Before accepting real payments
 
-This has not been tested. It depends on whether sponsors want reports in a form they can use, and on the impact figures being credible. The impact figures count only receiver-confirmed delivered servings, which is the basis a sponsor would need to rely on.
-
-## What is not claimed
-
-- No revenue, margin, customer count, conversion rate or payback period is claimed. None has been measured.
-- No customer has been interviewed or has committed to paying.
-- The Hyderabad reliability scores and demo organizations are synthetic.
-- No partnership with a sponsor, caterer or receiver exists yet.
-
-## What would test the hypotheses
-
-1. Recruit a small number of caterers and banquet operators in Hyderabad for a pilot, free of charge.
-2. Measure how often they post a rescue, how often it is claimed, and how many servings are delivered.
-3. Ask pilot organizations directly what they would pay, and for which feature, before building any paywall.
-4. Ask one or two CSR teams whether an impact report would be useful to them, and what format they need.
-
-Each step produces evidence that can confirm or reject the pricing and payer assumptions above.
+Validate demand, implement billing and cancellation flows, establish support procedures, and review data protection and local operating requirements. Production authentication, verified onboarding, alert delivery, real capacity coverage and operational monitoring must be ready first. There is no payment integration, sponsor contract, food-safety certification or tax promise in this demo.

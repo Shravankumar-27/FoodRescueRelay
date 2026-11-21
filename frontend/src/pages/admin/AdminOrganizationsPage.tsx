@@ -1,116 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AppShell from "../../components/layout/AppShell";
 import Card from "../../components/ui/Card";
-import EmptyState from "../../components/ui/EmptyState";
-import Skeleton from "../../components/ui/Skeleton";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../features/auth/AuthContext";
 import { apiRequest } from "../../lib/api";
 import type { AdminOrg } from "../../types/api";
-
-const PAGE_SIZE = 50;
-
+interface Org extends AdminOrg { trust_score:number; rank_badge:string; rating:number|null; rating_count:number }
 export default function AdminOrganizationsPage() {
-  const { token } = useAuth();
-  const [offset, setOffset] = useState(0);
-
-  const orgsQuery = useQuery({
-    queryKey: ["admin", "organizations", offset],
-    queryFn: () =>
-      apiRequest<AdminOrg[]>(`/admin/organizations?limit=${PAGE_SIZE}&offset=${offset}`, {
-        token,
-      }),
-    enabled: !!token,
-  });
-
-  const orgs = orgsQuery.data ?? [];
-
-  return (
-    <AppShell title="Organizations" nav="admin">
-      <div className="flex flex-col gap-4">
-        {orgsQuery.isLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : orgsQuery.isError ? (
-          <p role="alert" className="text-sm text-red-700">
-            {orgsQuery.error instanceof Error
-              ? orgsQuery.error.message
-              : "Could not load organizations."}
-          </p>
-        ) : orgs.length === 0 ? (
-          <EmptyState title="No organizations yet." body="Organizations will appear here once they register." />
-        ) : (
-          <>
-            {/* Mobile: stacked cards */}
-            <ul className="flex flex-col gap-3 md:hidden">
-              {orgs.map((org) => (
-                <li key={org.id}>
-                  <Card>
-                    <dl className="grid grid-cols-2 gap-2 text-sm">
-                      <dt className="font-medium">Name</dt>
-                      <dd>{org.name}</dd>
-                      <dt className="font-medium">Type</dt>
-                      <dd>{org.organization_type}</dd>
-                      <dt className="font-medium">Verification</dt>
-                      <dd>{org.verification_status}</dd>
-                      <dt className="font-medium">Locality</dt>
-                      <dd>{org.locality}</dd>
-                      <dt className="font-medium">Reliability</dt>
-                      <dd>{Math.round(org.reliability * 100)}%</dd>
-                    </dl>
-                  </Card>
-                </li>
-              ))}
-            </ul>
-
-            {/* Desktop: table */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="min-w-full border-collapse text-left text-sm">
-                <caption className="mb-2 text-left text-base font-semibold">
-                  Organizations
-                </caption>
-                <thead>
-                  <tr className="border-b border-slate-300">
-                    <th scope="col" className="px-3 py-2">Name</th>
-                    <th scope="col" className="px-3 py-2">Type</th>
-                    <th scope="col" className="px-3 py-2">Verification</th>
-                    <th scope="col" className="px-3 py-2">Locality</th>
-                    <th scope="col" className="px-3 py-2">Reliability</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orgs.map((org) => (
-                    <tr key={org.id} className="border-b border-slate-200">
-                      <td className="px-3 py-2">{org.name}</td>
-                      <td className="px-3 py-2">{org.organization_type}</td>
-                      <td className="px-3 py-2">{org.verification_status}</td>
-                      <td className="px-3 py-2">{org.locality}</td>
-                      <td className="px-3 py-2">{Math.round(org.reliability * 100)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button
-            variant="secondary"
-            disabled={offset === 0 || orgsQuery.isFetching}
-            onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-          >
-            Previous page
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={orgs.length < PAGE_SIZE || orgsQuery.isFetching}
-            onClick={() => setOffset((o) => o + PAGE_SIZE)}
-          >
-            Next page
-          </Button>
-        </div>
-      </div>
-    </AppShell>
-  );
+ const {token}=useAuth(); const client=useQueryClient(); const [offset,setOffset]=useState(0); const [selected,setSelected]=useState<Org|null>(null); const [status,setStatus]=useState("VERIFIED"); const [reason,setReason]=useState(""); const [notice,setNotice]=useState("");
+ const orgs=useQuery({queryKey:["admin","organizations",offset],queryFn:()=>apiRequest<Org[]>(`/admin/organizations?limit=50&offset=${offset}`,{token})});
+ const save=useMutation({mutationFn:()=>apiRequest(`/admin/organizations/${selected?.id}/verification`,{method:"POST",token,body:{status,reason}}),onSuccess:()=>{setSelected(null);setReason("");setNotice("Verification updated and recorded in the audit log.");client.invalidateQueries({queryKey:["admin"]});}});
+ const trust=useMutation({mutationFn:()=>apiRequest("/admin/trust/recompute",{method:"POST",token}),onSuccess:()=>{setNotice("Trust scores recalculated from current outcomes and ratings.");client.invalidateQueries({queryKey:["admin"]});}});
+ return <AppShell title="Partner management" nav="admin"><div className="space-y-4"><div className="section-heading"><div><p className="eyebrow text-primary">Build a dependable network</p><h2 className="mt-2 text-2xl font-bold">Organizations & trust</h2></div><Button disabled={trust.isPending} onClick={()=>trust.mutate()}>Recalculate trust</Button></div><p className="text-sm text-muted">Verification reviews organization participation. It does not certify food safety. Partners with active handoffs must complete them before suspension.</p>{notice && <p role="status" className="rounded-xl bg-primaryLight p-3 text-sm text-primary">{notice}</p>}{(orgs.isError || trust.isError) && <p role="alert" className="text-danger">{orgs.error?.message || trust.error?.message}</p>}{selected && <Card><h3 className="font-bold">Review {selected.name}</h3><div className="mt-3 flex flex-col gap-3"><label className="text-sm">Verification status<select className="ml-3" value={status} onChange={e=>setStatus(e.target.value)}><option value="VERIFIED">Verified</option><option value="PENDING">Pending review</option><option value="SUSPENDED">Suspended</option></select></label><label className="text-sm">Reason for change<input className="mt-2 min-h-12 w-full rounded-xl border border-border px-3" maxLength={300} value={reason} onChange={e=>setReason(e.target.value)}/></label>{save.isError && <p role="alert" className="text-danger">{save.error.message}</p>}<div className="flex gap-2"><Button disabled={reason.trim().length<3 || save.isPending} onClick={()=>save.mutate()}>Save verification</Button><Button variant="secondary" onClick={()=>setSelected(null)}>Cancel</Button></div></div></Card>}<div className="grid gap-3 xl:grid-cols-2">{orgs.data?.map(org=><Card key={org.id}><div className="flex items-start justify-between gap-2"><div><h3 className="font-bold">{org.name}</h3><p className="mt-1 text-sm text-muted">{org.locality} · {org.organization_type.replace(/_/g," ")}</p></div><span className="rounded-lg bg-background px-2 py-1 text-xs font-bold">{org.rank_badge}</span></div><p className="my-3 text-sm">{org.verification_status} · Trust {Math.round(org.trust_score*100)}% · {org.rating ? `${org.rating}/5 (${org.rating_count})` : "No ratings"}</p>{org.organization_type!=="ADMIN" && <Button variant="secondary" onClick={()=>{setSelected(org);setStatus(org.verification_status);setReason("");save.reset();}}>Review partner</Button>}</Card>)}</div><div className="flex gap-2"><Button variant="secondary" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</Button><Button variant="secondary" disabled={(orgs.data?.length ?? 0)<50} onClick={()=>setOffset(offset+50)}>Next</Button></div></div></AppShell>;
 }

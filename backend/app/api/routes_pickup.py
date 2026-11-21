@@ -80,7 +80,7 @@ def deliver(
             "rescue_id": str(rescue.id),
             "status": RescueStatus.DELIVERED.value,
             "delivered_servings": impact.delivered_servings,
-            "rejected_servings": body.rejected_servings,
+            "rejected_servings": rescue.handoff.rejected_servings if rescue.handoff else 0,
             "impact_meals": impact.delivered_servings,
         },
         _request_id(request),

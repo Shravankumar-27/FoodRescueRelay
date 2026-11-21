@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
-from app.models.enums import DietaryType, HandlingType
+from app.models.enums import DietaryType, FoodCategory, HandlingType
 
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 AllergenName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
@@ -17,6 +17,7 @@ class FoodItemIn(BaseModel):
     name: ShortText
     quantity_servings: int = Field(ge=1, le=100000)
     dietary_type: DietaryType = DietaryType.UNKNOWN
+    food_category: FoodCategory = FoodCategory.COOKED_MEAL
     allergens: list[AllergenName] = Field(default_factory=list, max_length=20)
     allergen_info_unknown: bool = False
 

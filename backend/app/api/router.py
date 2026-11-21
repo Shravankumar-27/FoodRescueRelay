@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api import (
     routes_admin,
     routes_auth,
+    routes_chat,
     routes_donor_impact,
     routes_health,
     routes_offers,
@@ -22,3 +23,7 @@ api_router.include_router(routes_receivers.router)
 api_router.include_router(routes_admin.router)
 api_router.include_router(routes_pickup.router)
 api_router.include_router(routes_donor_impact.router)
+api_router.include_router(routes_chat.router)
+
+from app.api import routes_partners
+api_router.include_router(routes_partners.router)

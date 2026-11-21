@@ -10,7 +10,7 @@ All names, emails and contact details below are fictional.
 import sys
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 
 import app.models  # noqa: F401  - registers every model on Base.metadata
 from app.core.security import hash_password
@@ -247,11 +247,16 @@ def seed_demo(session) -> None:
     """Idempotently create demo orgs, capacities, users and the demo rescue."""
     _seed(session)
     _seed_demo_rescue(session)
+    from app.services.trust_service import compute_trust_scores
+    compute_trust_scores(session)
 
 
 def init_database() -> None:
     """Create all tables and seed demo data. Safe to run repeatedly."""
     Base.metadata.create_all(engine)
+    from app.db.upgrade import upgrade_schema
+    with engine.begin() as connection:
+        upgrade_schema(connection)
     session = SessionLocal()
     try:
         seed_demo(session)

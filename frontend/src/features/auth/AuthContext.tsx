@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiError, apiRequest } from "../../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import type { LoginData, MeData, OrganizationOut, UserOut } from "../../types/api";
 
 const STORAGE_KEY = "rr.session";
@@ -51,6 +52,7 @@ function writeSession(session: Session | null): void {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [initial] = useState<Session | null>(() => readSession());
   const [session, setSession] = useState<Session | null>(initial);
   const [isReady, setIsReady] = useState<boolean>(initial === null);
@@ -99,16 +101,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: data.user,
       organization: data.organization,
     };
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    localStorage.removeItem("rr.draft");
+    sessionStorage.removeItem("rr.repeat");
     writeSession(next);
     setSession(next);
     setIsReady(true);
     return data;
-  }, []);
+  }, [queryClient]);
 
   const logout = useCallback(() => {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    localStorage.removeItem("rr.draft");
+    sessionStorage.removeItem("rr.repeat");
     writeSession(null);
     setSession(null);
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

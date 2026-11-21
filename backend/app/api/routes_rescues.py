@@ -17,7 +17,7 @@ from app.models.rescue import Rescue
 from app.models.status_event import StatusEvent
 from app.models.user import User
 from app.schemas.rescue import RescueCreate
-from app.services.dispatch_service import advance_expired_offers, cancel_pending_offers, start_dispatch
+from app.services.dispatch_service import advance_expired_offers, cancel_pending_offers, start_dispatch, sweep_expired_matching
 from app.services.matching_service import match_rescue
 from app.services.rescue_service import (
     can_view_rescue,
@@ -84,6 +84,10 @@ def list_my_rescues(
     db: DbSession,
     donor: User = Depends(require_roles(UserRole.DONOR)),
 ) -> dict[str, Any]:
+    now = utcnow()
+    advance_expired_offers(db, now)
+    sweep_expired_matching(db, now)
+    db.commit()
     rescues = list(
         db.scalars(
             select(Rescue)

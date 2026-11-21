@@ -4,7 +4,9 @@ export default function HowWeCalculate() {
       <summary className="cursor-pointer font-medium text-primary">How we calculate this</summary>
       <p className="mt-2 text-muted">
         Meals rescued = receiver-confirmed delivered servings. Impact counts only after delivery is
-        confirmed. Weight-based metrics are omitted because no kilogram data is recorded.
+        confirmed. Estimated food weight = delivered servings × 0.4 kg. Estimated avoided
+        emissions = estimated weight × 2.5 kg CO₂e/kg. These are illustrative planning
+        assumptions, not measured weight, verified emissions reductions or carbon credits.
       </p>
     </details>
   );

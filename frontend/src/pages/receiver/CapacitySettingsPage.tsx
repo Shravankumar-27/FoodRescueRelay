@@ -1,3 +1,4 @@
+import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,10 @@ const CODE_MESSAGES: Record<string, string> = {
 };
 
 interface FormState {
+  accepted_dietary_types: string[];
+  accepted_food_categories: string[];
+  excluded_allergens: string;
+  description: string;
   available: boolean;
   max_servings: string;
   available_servings: string;
@@ -50,6 +55,10 @@ export default function CapacitySettingsPage() {
     const c = capacityQuery.data;
     if (c) {
       setForm({
+        accepted_dietary_types: c.accepted_dietary_types ?? [],
+        accepted_food_categories: c.accepted_food_categories ?? [],
+        excluded_allergens: (c.excluded_allergens ?? []).join(", "),
+        description: c.description ?? "",
         available: c.available,
         max_servings: String(c.max_servings),
         available_servings: String(c.available_servings),
@@ -70,6 +79,7 @@ export default function CapacitySettingsPage() {
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(["receiver", "capacity"], data);
+      queryClient.invalidateQueries({ queryKey: ["receiver", "offers"] });
       setSuccess("Capacity settings saved.");
     },
   });
@@ -103,6 +113,10 @@ export default function CapacitySettingsPage() {
     setClientError(null);
 
     saveMutation.mutate({
+      accepted_dietary_types: form.accepted_dietary_types,
+      accepted_food_categories: form.accepted_food_categories,
+      excluded_allergens: form.excluded_allergens.split(",").map(s => s.trim()).filter(Boolean),
+      description: form.description,
       available: form.available,
       max_servings: max,
       available_servings: avail,
@@ -223,6 +237,10 @@ export default function CapacitySettingsPage() {
                 </select>
               </div>
 
+              <div className="grid gap-4 lg:grid-cols-2">{([{key:"accepted_dietary_types",label:"Accepted dietary labels",options:DIETS},{key:"accepted_food_categories",label:"Accepted food categories",options:CATEGORIES}] as const).map(group => <fieldset key={group.key}><legend className="font-semibold">{group.label}</legend><p className="my-2 text-sm text-muted">Leave empty to allow all within your vegetarian/non-vegetarian preference. Selecting labels requires every item to match.</p><div className="flex flex-wrap gap-2">{group.options.map(value => <label key={value} className={`flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm ${form[group.key].includes(value) ? "border-primary bg-primaryLight" : "border-border"}`}><input type="checkbox" checked={form[group.key].includes(value)} onChange={e => update(group.key, e.target.checked ? [...form[group.key],value] : form[group.key].filter(v => v !== value))}/>{foodLabel(value)}</label>)}</div></fieldset>)}</div>
+              <Input label="Allergens to exclude" hint="Comma-separated, e.g. dairy, peanuts. Unknown allergen information is excluded when restrictions are set." value={form.excluded_allergens} onChange={e => update("excluded_allergens",e.target.value)}/>
+              <Input label="About your organization" maxLength={500} hint="Describe community needs. Use synthetic details only; no personal information." value={form.description} onChange={e => update("description",e.target.value)}/>
+              <p className="text-sm text-muted">Dietary labels are donor-provided. Halal, gluten-free and diabetic-friendly labels do not establish vegetarian status or certify suitability. Confirm ingredients with the donor.</p>
               {clientError ? (
                 <p role="alert" className="text-sm text-red-700">
                   {clientError}

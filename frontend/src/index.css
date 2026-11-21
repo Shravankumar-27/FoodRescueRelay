@@ -1,56 +1,81 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
-
-body {
-  @apply bg-background text-ink antialiased;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-ink antialiased;
+    font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  :focus-visible {
+    outline: 2px solid #2D6A4F;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  * { box-sizing: border-box; }
 }
 
-:focus-visible {
-  outline: 3px solid #166534;
-  outline-offset: 2px;
-  border-radius: 4px;
+@layer components {
+  .skeleton {
+    background: linear-gradient(90deg, #F3EDE4 0%, #EDE5D8 50%, #F3EDE4 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Shimmer skeleton animation */
-.skeleton {
-  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
+/* Safe area insets for mobile */
+.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top: max(0px, env(safe-area-inset-top)); }
 
 /* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1CBB8; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #B5AC9A; }
 
 /* Leaflet map overrides */
 .leaflet-container {
-  font-family: "Inter", system-ui, sans-serif;
-  border-radius: 12px;
+  font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+  border-radius: 16px;
 }
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px -4px rgba(0,0,0,0.12);
+}
+.leaflet-popup-content { margin: 12px 16px; font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Harvest design system: compact, readable and touch friendly. */
+@layer components {
+  .metric { @apply rounded-2xl border border-border bg-white p-4 sm:p-5; }
+  .eyebrow { @apply text-xs font-bold uppercase tracking-[0.14em]; }
+  .section-heading { @apply mb-3 flex flex-wrap items-center justify-between gap-2; }
+  .section-heading h3 { @apply text-lg font-bold tracking-tight; }
+  .icon-button { @apply flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-white text-primary; }
+  .view-toggle { @apply inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-muted; }
+  .view-toggle.selected { @apply bg-primaryLight text-primary; }
+  .hero-cta { @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#f6c76b] px-5 text-sm font-bold text-[#203f2d] shadow-sm; }
+  .harvest-hero { @apply relative overflow-hidden rounded-3xl bg-[#183e2e] p-6 text-white sm:p-8; background-image: radial-gradient(ellipse at 100% 100%, #417d49 0, transparent 65%); }
+}
+.food-art { position:absolute; width:240px; height:240px; right:-50px; top:15%; opacity:.24; border:22px solid #f7ebc9; border-radius:50%; box-shadow:0 0 0 2px #ffffff30, 0 0 0 16px #ffffff10; transform:rotate(-25deg); }
+.food-art span { position:absolute; width:80px; height:80px; background:#f5b44d; border-radius:50%; top:20px; left:35px; box-shadow:55px 60px 0 #db6e43; }
+.food-art i,.food-art b { position:absolute; width:55px; height:100px; border-radius:90% 10% 90% 10%; background:#a6ce73; top:80px; left:20px; transform:rotate(-25deg); }
+.food-art b { top:10px; left:100px; transform:rotate(55deg); }
+@media(min-width:1280px) { .food-art { right:4%; opacity:.65; } }
+select { min-height:48px; max-width:100%; border:1px solid #dcded4; border-radius:12px; background-color:white; padding:8px 32px 8px 12px; font-size:14px; color:#27392e; }
+input[type=checkbox] { accent-color:#2d6a4f; }
+.partner-marker span { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:3px solid white; border-radius:50% 50% 50% 5px; box-shadow:0 3px 8px #0003; color:white; font-weight:800; }
+@media(max-width:767px) { input:not([type=checkbox]):not([type=radio]),textarea,select { font-size:16px; } button, a[role=button] { min-height:44px; } .food-art { right:-110px; opacity:.2; } }
+@media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }

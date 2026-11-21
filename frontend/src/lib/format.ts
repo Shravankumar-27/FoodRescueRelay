@@ -33,3 +33,24 @@ export function formatMinutes(n: number): string {
 export function statusLabel(status: string): string {
   return STATUS_LABELS.get(status) ?? status;
 }
+
+export function formatNumber(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toString();
+}
+
+export function formatKg(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
+  return `${kg.toFixed(1)} kg`;
+}
+
+export function timeAgo(iso: string): string {
+  const diff = Date.now() - Date.parse(iso);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}

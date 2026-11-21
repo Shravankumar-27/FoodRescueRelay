@@ -1,3 +1,4 @@
+import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +16,7 @@ type FoodRow = {
   name: string;
   quantity: string;
   dietary_type: string;
+  food_category: string;
   allergens: string;
   allergen_info_unknown: boolean;
 };
@@ -52,18 +54,12 @@ const FOOD_CHIPS = [
 
 const QUICK_QUANTITIES = [25, 50, 100, 200];
 
-const DIETARY_OPTIONS: { value: string; label: string }[] = [
-  { value: "VEG", label: "🥦 Vegetarian" },
-  { value: "NON_VEG", label: "🍗 Non-vegetarian" },
-  { value: "VEGAN", label: "🌱 Vegan" },
-  { value: "OTHER", label: "Other" },
-  { value: "UNKNOWN", label: "Unknown" },
-];
+const DIETARY_OPTIONS = DIETS.map(value => ({ value, label: foodLabel(value) }));
 
 const HOLDING_OPTIONS: { value: string; label: string; desc: string; icon: string }[] = [
   { value: "HOT_HELD", label: "Kept hot", desc: "Above 60 °C (chafing dish / hot box)", icon: "🔥" },
   { value: "REFRIGERATED", label: "Refrigerated", desc: "Below 5 °C since preparation", icon: "❄️" },
-  { value: "ROOM_TEMPERATURE", label: "Room temperature", desc: "Ambient — consume within 2 hrs", icon: "🌡️" },
+  { value: "ROOM_TEMPERATURE", label: "Room temperature", desc: "Record time out of temperature control", icon: "🌡️" },
   { value: "OTHER", label: "Other", desc: "Describe in notes below", icon: "📦" },
   { value: "UNKNOWN", label: "Not sure", desc: "Please add details in notes", icon: "❓" },
 ];
@@ -116,7 +112,7 @@ function splitList(value: string): string[] {
 }
 
 function emptyRow(): FoodRow {
-  return { name: "", quantity: "", dietary_type: "VEG", allergens: "", allergen_info_unknown: false };
+  return { name: "", quantity: "", dietary_type: "VEG", food_category: "COOKED_MEAL", allergens: "", allergen_info_unknown: false };
 }
 
 function readDraft(): Partial<Draft> | null {
@@ -133,7 +129,7 @@ function readRepeatRows(): FoodRow[] | null {
     const raw = sessionStorage.getItem(REPEAT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
-      food_items?: { name?: string; quantity_servings?: number; dietary_type?: string }[];
+      food_items?: { name?: string; quantity_servings?: number; dietary_type?: string; food_category?: string; allergens?: string[]; allergen_info_unknown?: boolean }[];
     };
     const items = parsed.food_items ?? [];
     if (items.length === 0) return null;
@@ -141,8 +137,9 @@ function readRepeatRows(): FoodRow[] | null {
       name: f.name ?? "",
       quantity: f.quantity_servings !== undefined ? String(f.quantity_servings) : "",
       dietary_type: f.dietary_type ?? "VEG",
-      allergens: "",
-      allergen_info_unknown: false,
+      food_category: f.food_category ?? "COOKED_MEAL",
+      allergens: (f.allergens ?? []).join(", "),
+      allergen_info_unknown: f.allergen_info_unknown ?? true,
     }));
   } catch {
     return null;
@@ -155,7 +152,7 @@ function validateFood(rows: FoodRow[]): Record<number, FoodErr> {
     const e: FoodErr = {};
     if (!r.name.trim()) e.name = "Enter a food name.";
     const q = Number(r.quantity);
-    if (!r.quantity.trim() || !Number.isFinite(q) || q <= 0) {
+    if (!r.quantity.trim() || !Number.isInteger(q) || q <= 0) {
       e.quantity = "Enter the number of servings, greater than 0.";
     }
     if (e.name || e.quantity) errs[i] = e;
@@ -318,6 +315,7 @@ export default function CreateRescuePage() {
         name: r.name.trim(),
         quantity_servings: Number(r.quantity),
         dietary_type: r.dietary_type,
+        food_category: r.food_category || "COOKED_MEAL",
         allergens: splitList(r.allergens),
         allergen_info_unknown: r.allergen_info_unknown,
       })),
@@ -510,6 +508,7 @@ export default function CreateRescuePage() {
                     </div>
                   </div>
 
+                  <label className="flex flex-col gap-2 text-sm font-semibold">Food category<select value={row.food_category || "COOKED_MEAL"} onChange={e => updateRow(i, { food_category: e.target.value })}>{CATEGORIES.map(c => <option key={c} value={c}>{foodLabel(c)}</option>)}</select></label>
                   <Input
                     label="Allergens (comma-separated)"
                     name={`food-allergens-${i}`}
@@ -743,7 +742,7 @@ export default function CreateRescuePage() {
                   onChange={(e) => setAttest(e.target.checked)}
                 />
                 <span className="text-ink">
-                  I confirm this food is untouched, was held safely, and is safe to redistribute.{" "}
+                  I confirm the food is untouched and the handling details and pickup deadline are accurate.{" "}
                   <span aria-hidden="true">*</span>
                 </span>
               </label>

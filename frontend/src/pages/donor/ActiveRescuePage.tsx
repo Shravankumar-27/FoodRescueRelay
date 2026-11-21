@@ -1,3 +1,4 @@
+import PartnerRating from "../../components/rescue/PartnerRating";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -9,6 +10,7 @@ import StatusBadge from "../../components/rescue/StatusBadge";
 import StatusTimeline from "../../components/rescue/StatusTimeline";
 import HowWeCalculate from "../../components/impact/HowWeCalculate";
 import ImpactMetric from "../../components/impact/ImpactMetric";
+import ChatBox from "../../components/chat/ChatBox";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Skeleton from "../../components/ui/Skeleton";
@@ -27,6 +29,11 @@ const DIETARY_LABELS: Record<string, string> = {
   VEG: "🥦 Vegetarian",
   NON_VEG: "🍗 Non-vegetarian",
   VEGAN: "🌱 Vegan",
+  JAIN: "🙏 Jain",
+  HALAL: "☪️ Halal",
+  GLUTEN_FREE: "🌾 Gluten-free",
+  DIABETIC_FRIENDLY: "💙 Diabetic-friendly",
+  RAW_VEGAN: "🥬 Raw Vegan",
   OTHER: "Other",
   UNKNOWN: "Unknown",
 };
@@ -180,7 +187,7 @@ export default function ActiveRescuePage() {
                   <h2 className="text-xl font-bold text-ink">{d.display_id}</h2>
                   <StatusBadge status={d.status} />
                 </div>
-                <RescueClock pickupBy={d.pickup_by} />
+                {["POSTED", "MATCHING", "OFFERED", "CLAIMED"].includes(d.status) && <RescueClock pickupBy={d.pickup_by} />}
               </div>
             </Card>
 
@@ -257,6 +264,13 @@ export default function ActiveRescuePage() {
               </Card>
             )}
 
+            {/* In-app Coordinator Chat (Req #4 & #14) */}
+            {d.claimed_receiver && <ChatBox
+              rescueId={id}
+              recipientName={d.claimed_receiver?.name ?? "Receiver / Volunteer"}
+              defaultOpen={d.status === "CLAIMED" || d.status === "COLLECTED"}
+            />}
+
             {/* Matching */}
             {matchable && (
               <Card>
@@ -323,6 +337,7 @@ export default function ActiveRescuePage() {
             {/* Impact */}
             {d.status === "DELIVERED" && (
               <section aria-labelledby="impact-heading" className="flex flex-col gap-4">
+                <PartnerRating rescueId={id}/>
                 <h3 id="impact-heading" className="text-lg font-semibold text-ink">
                   🎉 Impact
                 </h3>

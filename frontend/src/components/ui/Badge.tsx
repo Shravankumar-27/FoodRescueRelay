@@ -1,36 +1,34 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "neutral" | "success" | "warn" | "danger" | "info" | "fresh";
+type Tone = "default" | "fresh" | "warn" | "urgent" | "info" | "muted" | "gold" | "silver" | "bronze";
 
-const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  neutral: "bg-slate-100 text-slate-700",
-  success: "bg-successLight text-success",
-  warn: "bg-accentLight text-warn",
-  danger: "bg-dangerLight text-danger",
-  info: "bg-infoLight text-info",
-  fresh: "bg-freshBg text-fresh",
+const TONE: Record<Tone, string> = {
+  default: "bg-background text-ink border-border",
+  fresh: "bg-freshBg text-fresh border-fresh/20",
+  warn: "bg-warnBg text-warn border-warn/20",
+  urgent: "bg-urgentBg text-urgent border-urgent/20",
+  info: "bg-infoLight text-info border-info/20",
+  muted: "bg-background text-muted border-border",
+  gold: "bg-goldLight text-gold border-gold/30",
+  silver: "bg-silverLight text-silver border-silver/30",
+  bronze: "bg-bronzeLight text-bronze border-bronze/30",
 };
 
-export default function Badge({
+export function Badge({
   children,
-  variant = "neutral",
-  dot = false,
+  tone = "default",
+  className = "",
 }: {
   children: ReactNode;
-  variant?: BadgeVariant;
-  dot?: boolean;
+  tone?: Tone;
+  className?: string;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${VARIANT_CLASSES[variant]}`}
-    >
-      {dot && (
-        <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${variant === "danger" ? "bg-danger" : variant === "warn" ? "bg-warn" : variant === "success" || variant === "fresh" ? "bg-fresh" : "bg-info"}`}
-          aria-hidden="true"
-        />
-      )}
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${TONE[tone]} ${className}`}>
       {children}
     </span>
   );
 }
+
+// Legacy default export for backwards compatibility with existing imports
+export default Badge;

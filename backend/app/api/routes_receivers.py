@@ -6,16 +6,19 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
 from app.core.errors import AppError
 from app.models.base_types import new_uuid, utcnow
-from app.models.enums import NeedLevel, UserRole
+from app.models.enums import NeedLevel, OrganizationType, UserRole, DietaryType, FoodCategory
+from app.models.organization import Organization
 from app.models.receiver_capacity import ReceiverCapacity
 from app.models.user import User
+from app.services import geo
 from app.services.rescue_service import iso_utc
+from app.services.capacity_service import reserved_servings, free_servings
 
 router = APIRouter(prefix="/receivers", tags=["receivers"])
 
@@ -28,6 +31,10 @@ class CapacityUpdate(BaseModel):
     accepts_non_veg: bool
     transport_available: bool
     need_level: NeedLevel
+    accepted_dietary_types: list[DietaryType] | None = None
+    accepted_food_categories: list[FoodCategory] | None = None
+    excluded_allergens: list[str] | None = Field(default=None, max_length=20)
+    description: str | None = Field(default=None, max_length=500)
 
 
 def _request_id(request: Request) -> str:
@@ -56,15 +63,20 @@ def _get_or_create(db: DbSession, user: User) -> ReceiverCapacity:
     return capacity
 
 
-def _serialize(capacity: ReceiverCapacity) -> dict[str, Any]:
+def _serialize(capacity: ReceiverCapacity, db) -> dict[str, Any]:
     return {
         "available": capacity.available,
         "max_servings": capacity.max_servings,
-        "available_servings": capacity.available_servings,
+        "available_servings": free_servings(db, capacity),
+        "reserved_servings": reserved_servings(db, capacity.organization_id),
         "accepts_veg": capacity.accepts_veg,
         "accepts_non_veg": capacity.accepts_non_veg,
         "transport_available": capacity.transport_available,
         "need_level": capacity.need_level,
+        "accepted_dietary_types": capacity.accepted_dietary_types or [],
+        "accepted_food_categories": capacity.accepted_food_categories or [],
+        "excluded_allergens": capacity.excluded_allergens or [],
+        "description": capacity.description or "",
         "updated_at": iso_utc(capacity.updated_at),
     }
 
@@ -77,7 +89,7 @@ def get_capacity(
 ) -> dict[str, Any]:
     capacity = _get_or_create(db, user)
     db.commit()
-    return ok(_serialize(capacity), _request_id(request))
+    return ok(_serialize(capacity, db), _request_id(request))
 
 
 @router.put("/capacity")
@@ -97,13 +109,80 @@ def update_capacity(
         raise AppError("DIETARY_REQUIRED", "Select at least one food type you accept.", 422)
 
     capacity = _get_or_create(db, user)
+    # Serialize capacity edits with claims before reading active reservations.
+    db.execute(update(ReceiverCapacity).where(ReceiverCapacity.id == capacity.id).values(updated_at=utcnow()))
+    reserved = reserved_servings(db, user.organization_id)
+    if body.available_servings + reserved > body.max_servings:
+        raise AppError("CAPACITY_EXCEEDS_MAX", f"{reserved} servings are reserved by active handoffs. Free plus reserved servings cannot exceed maximum capacity.", 422)
     capacity.available = body.available
     capacity.max_servings = body.max_servings
-    capacity.available_servings = body.available_servings
+    capacity.available_servings = body.available_servings + reserved
     capacity.accepts_veg = body.accepts_veg
     capacity.accepts_non_veg = body.accepts_non_veg
     capacity.transport_available = body.transport_available
     capacity.need_level = body.need_level.value
+    for name in ("accepted_dietary_types", "accepted_food_categories", "excluded_allergens", "description"):
+        value = getattr(body, name)
+        if value is not None:
+            setattr(capacity, name, [getattr(v, "value", v).strip().lower() if name == "excluded_allergens" else getattr(v, "value", v) for v in value] if isinstance(value, list) else value.strip())
     capacity.updated_at = utcnow()
     db.commit()
-    return ok(_serialize(capacity), _request_id(request))
+    return ok(_serialize(capacity, db), _request_id(request))
+
+
+@router.get("/nearby")
+def list_nearby_receivers(
+    request: Request,
+    db: DbSession,
+    user: User = Depends(require_roles(UserRole.DONOR)),
+    dietary_type: DietaryType | None = None,
+    food_category: FoodCategory | None = None,
+) -> dict[str, Any]:
+    """Return receivers within 15km of the donor's organization."""
+    donor_org = user.organization
+    all_orgs = db.scalars(
+        select(Organization).where(
+            Organization.organization_type.notin_([OrganizationType.CATERER.value, OrganizationType.ADMIN.value])
+            , Organization.verification_status == "VERIFIED"
+        )
+    ).all()
+    from app.services.trust_service import trust_details
+    nearby = []
+    for org in all_orgs:
+        dist = geo.haversine_km(donor_org.latitude, donor_org.longitude, org.latitude, org.longitude)
+        if dist <= 15.0:
+            cap = db.scalar(select(ReceiverCapacity).where(ReceiverCapacity.organization_id == org.id))
+            if cap is None:
+                continue
+            if dietary_type:
+                if cap.accepted_dietary_types and dietary_type.value not in cap.accepted_dietary_types:
+                    continue
+                veg = dietary_type.value in {"VEG", "VEGAN", "JAIN", "RAW_VEGAN"}
+                if (veg and not cap.accepts_veg) or (not veg and not cap.accepts_non_veg):
+                    continue
+            if food_category and cap.accepted_food_categories and food_category.value not in cap.accepted_food_categories:
+                continue
+            nearby.append({
+                **trust_details(db, org),
+                "id": str(org.id),
+                "name": org.name,
+                "locality": org.locality,
+                "latitude": round(org.latitude, 2),
+                "longitude": round(org.longitude, 2),
+                "accepted_dietary_types": cap.accepted_dietary_types or [],
+                "accepted_food_categories": cap.accepted_food_categories or [],
+                "description": cap.description or "",
+                "organization_type": org.organization_type,
+                "verification_status": org.verification_status,
+                "reliability": org.reliability,
+                "distance_km": round(dist, 2),
+                "available": cap.available if cap else False,
+                "max_servings": cap.max_servings if cap else 0,
+                "available_servings": free_servings(db, cap),
+                "need_level": cap.need_level if cap else "MEDIUM",
+                "transport_available": cap.transport_available if cap else False,
+                "accepts_veg": cap.accepts_veg if cap else True,
+                "accepts_non_veg": cap.accepts_non_veg if cap else True,
+            })
+    nearby.sort(key=lambda x: x["distance_km"])
+    return ok(nearby, _request_id(request))

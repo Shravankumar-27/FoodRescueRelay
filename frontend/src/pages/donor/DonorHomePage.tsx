@@ -1,257 +1,64 @@
+import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Repeat2, TrendingUp, Utensils, Clock, ChevronRight, Flame } from "lucide-react";
-import StatusBadge from "../../components/rescue/StatusBadge";
+import { Plus, Leaf, Users, Utensils, Package, Map, List, MessageCircle, RefreshCw, Repeat2 } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
-import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import EmptyState from "../../components/ui/EmptyState";
+import Metric from "../../components/ui/Metric";
+import Button from "../../components/ui/Button";
 import Skeleton from "../../components/ui/Skeleton";
+import StatusBadge from "../../components/rescue/StatusBadge";
+import RescueClock from "../../components/rescue/RescueClock";
 import { useAuth } from "../../features/auth/AuthContext";
-import { useToast } from "../../features/toast/ToastContext";
-import { ApiError, apiRequest } from "../../lib/api";
-import { formatDateTime } from "../../lib/format";
-import type { RescueDetail, RescueSummary } from "../../types/api";
-
-const ACTIVE_STATUSES: string[] = ["POSTED", "MATCHING", "OFFERED", "CLAIMED", "COLLECTED"];
-
-function urgencyColor(pickupBy: string): "fresh" | "warn" | "urgent" {
-  const mins = (new Date(pickupBy).getTime() - Date.now()) / 60000;
-  if (mins > 60) return "fresh";
-  if (mins > 20) return "warn";
-  return "urgent";
-}
-
-function UrgencyBar({ pickupBy }: { pickupBy: string }) {
-  const color = urgencyColor(pickupBy);
-  const colorMap = {
-    fresh: "bg-fresh",
-    warn: "bg-warn",
-    urgent: "bg-urgent animate-pulse",
-  };
-  const mins = Math.max(0, Math.round((new Date(pickupBy).getTime() - Date.now()) / 60000));
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <div className={`h-2 w-2 rounded-full ${colorMap[color]}`} />
-      <span className={color === "urgent" ? "text-urgent font-semibold" : "text-muted"}>
-        {mins > 0 ? `${mins} min left` : "Expired"}
-      </span>
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string | number; accent?: boolean }) {
-  return (
-    <Card variant={accent ? "accent" : "default"} className="flex items-center gap-4">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent ? "bg-primary/10" : "bg-background"}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs text-muted">{label}</p>
-        <p className="text-2xl font-bold text-ink">{value}</p>
-      </div>
-    </Card>
-  );
-}
+import { apiRequest } from "../../lib/api";
+import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
+import type { RescueSummary, RescueDetail, NearbyReceiver, ImpactSummary } from "../../types/api";
+const RescueMap = lazy(() => import("../../components/map/RescueMap"));
+const ACTIVE = ["POSTED", "MATCHING", "OFFERED", "CLAIMED", "COLLECTED"];
 
 export default function DonorHomePage() {
-  const { user, token } = useAuth();
+  const { token, organization } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [repeating, setRepeating] = useState(false);
-
-  const mine = useQuery({
-    queryKey: ["rescues", "mine"],
-    queryFn: () => apiRequest<RescueSummary[]>("/rescues/mine", { token }),
-    enabled: !!token,
-  });
-
-  const rescues = [...(mine.data ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const latest = rescues[0];
-  const activeRescue = latest && ACTIVE_STATUSES.includes(latest.status) ? latest : null;
-
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-  const thisMonth = rescues.filter((r) => new Date(r.created_at).getTime() >= monthStart);
-  const mealsThisMonth = thisMonth.reduce((sum, r) => sum + (r.delivered_servings ?? 0), 0);
-  const completionRate =
-    rescues.length > 0
-      ? Math.round((rescues.filter((r) => r.status === "DELIVERED").length / rescues.length) * 100)
-      : 0;
-  const recent = rescues.slice(0, 5);
-
+  const [view, setView] = useState("map");
+  const [diet, setDiet] = useState("");
+  const [category, setCategory] = useState("");
+  const [sort, setSort] = useState("distance");
+  const [available, setAvailable] = useState(false);
+  const [repeatError, setRepeatError] = useState("");
+  const mine = useQuery({ queryKey: ["rescues", "mine"], queryFn: () => apiRequest<RescueSummary[]>("/rescues/mine", { token }), refetchInterval: 5000 });
+  const summary = useQuery({ queryKey: ["impact", "summary"], queryFn: () => apiRequest<ImpactSummary>("/impact/summary", { token }), refetchInterval: 15000 });
+  const receivers = useQuery({ queryKey: ["receivers", "nearby", diet, category], queryFn: () => apiRequest<NearbyReceiver[]>(`/receivers/nearby?${new URLSearchParams({ ...(diet ? { dietary_type: diet } : {}), ...(category ? { food_category: category } : {}) })}`, { token }), refetchInterval: 10000 });
+  const active = (mine.data ?? []).filter(r => ACTIVE.includes(r.status));
+  const online = (receivers.data ?? []).filter(r => r.available && r.available_servings > 0);
+  const directory = [...(receivers.data ?? [])].filter(r => !available || r.available).sort((a,b) => sort === "trust" ? b.trust_score-a.trust_score : sort === "need" ? ({HIGH:3,MEDIUM:2,LOW:1}[b.need_level] ?? 0)-({HIGH:3,MEDIUM:2,LOW:1}[a.need_level] ?? 0) : a.distance_km-b.distance_km);
+  const pins = directory.map(r => ({ id: r.id, lat: r.latitude, lng: r.longitude, label: r.name, sublabel: r.locality, type: "receiver" as const, capacity: r.available_servings, needLevel: r.need_level, badge: r.rank_badge, distance_km: r.distance_km, actionLabel: "Message partner", onAction: () => navigate(`/messages?partner=${r.id}`) }));
   async function repeatLast() {
+    const latest = mine.data?.[0];
     if (!latest) return;
-    setRepeating(true);
     try {
       const detail = await apiRequest<RescueDetail>(`/rescues/${latest.id}`, { token });
-      sessionStorage.setItem(
-        "rr.repeat",
-        JSON.stringify({
-          food_items: detail.food_items.map((f) => ({
-            name: f.name,
-            quantity_servings: f.quantity_servings,
-            dietary_type: f.dietary_type,
-          })),
-        }),
-      );
+      localStorage.removeItem("rr.draft");
+      sessionStorage.setItem("rr.repeat", JSON.stringify({ food_items: detail.food_items }));
       navigate("/donor/rescue/new");
-    } catch (e) {
-      toast({
-        variant: "error",
-        title: "Couldn't load last rescue",
-        message: e instanceof ApiError ? e.message : "Please try again.",
-      });
-    } finally {
-      setRepeating(false);
-    }
+    } catch (e) { setRepeatError(e instanceof Error ? e.message : "Could not load the last rescue."); }
   }
-
-  const firstName = user?.name?.split(" ")[0] ?? "there";
-
-  return (
-    <AppShell title="Home" nav="donor">
-      <div className="flex flex-col gap-6">
-        {/* Greeting */}
-        <div>
-          <p className="text-sm text-muted">Welcome back</p>
-          <h2 className="text-2xl font-bold text-ink">Hi, {firstName} 👋</h2>
-          <p className="text-sm text-muted mt-0.5">Hyderabad · Sample data</p>
-        </div>
-
-        {/* Primary CTA */}
-        <Link
-          to="/donor/rescue/new"
-          className="flex min-h-[60px] items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-white shadow-card hover:bg-primaryDark focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 transition-all active:scale-[0.98]"
-        >
-          <Plus className="h-6 w-6" />
-          Post Surplus Food
-        </Link>
-
-        {/* Loading skeleton */}
-        {mine.isLoading && (
-          <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading your rescues">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        )}
-
-        {/* Error */}
-        {mine.isError && (
-          <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
-            {mine.error instanceof ApiError ? mine.error.message : "We couldn't load your rescues."}
-          </div>
-        )}
-
-        {/* Active rescue */}
-        {activeRescue && (
-          <Card variant="fresh" className="relative overflow-hidden">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-fresh">
-                <Flame className="h-4 w-4" />
-                Active rescue
-              </div>
-              <UrgencyBar pickupBy={activeRescue.pickup_by} />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-bold text-ink">{activeRescue.display_id}</p>
-                <p className="text-sm text-muted flex items-center gap-1 mt-0.5">
-                  <Clock className="h-3 w-3" />
-                  Pickup by {formatDateTime(activeRescue.pickup_by)}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge status={activeRescue.status} />
-                <Link
-                  to={`/donor/rescue/${activeRescue.id}`}
-                  className="inline-flex min-h-[40px] items-center gap-1 rounded-button border border-primary px-4 text-sm font-semibold text-primary hover:bg-primaryLight transition-colors"
-                >
-                  View <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Empty state */}
-        {!mine.isLoading && !mine.isError && rescues.length === 0 && (
-          <EmptyState
-            title="No rescues yet"
-            body="When you have untouched surplus food, post it here. We'll find a nearby receiver who can collect it in time."
-            action={
-              <Link to="/donor/rescue/new" className="font-semibold text-primary underline">
-                Post your first rescue
-              </Link>
-            }
-          />
-        )}
-
-        {/* Stats grid */}
-        {rescues.length > 0 && (
-          <section aria-labelledby="stats-heading" className="grid gap-3 sm:grid-cols-3">
-            <h3 id="stats-heading" className="sr-only">Your stats</h3>
-            <StatCard
-              icon={<Utensils className="h-5 w-5 text-primary" />}
-              label="Meals rescued this month"
-              value={mealsThisMonth}
-              accent
-            />
-            <StatCard
-              icon={<TrendingUp className="h-5 w-5 text-info" />}
-              label="Rescues this month"
-              value={thisMonth.length}
-            />
-            <StatCard
-              icon={<div className="text-base font-bold text-warn">%</div>}
-              label="Completion rate"
-              value={`${completionRate}%`}
-            />
-          </section>
-        )}
-
-        {/* Repeat last + recent */}
-        {latest && (
-          <div className="flex flex-col gap-4">
-            <Button
-              variant="secondary"
-              onClick={repeatLast}
-              disabled={repeating}
-              className="min-h-[44px] flex items-center gap-2"
-            >
-              <Repeat2 className="h-4 w-4" />
-              {repeating ? "Loading..." : "Repost last listing"}
-            </Button>
-
-            {recent.length > 0 && (
-              <section aria-labelledby="recent-heading" className="flex flex-col gap-3">
-                <h3 id="recent-heading" className="text-sm font-semibold text-muted uppercase tracking-wider">
-                  Previous rescues
-                </h3>
-                <ul className="flex flex-col gap-2">
-                  {recent.map((r) => (
-                    <li key={r.id}>
-                      <Link
-                        to={`/donor/rescue/${r.id}`}
-                        className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface p-4 hover:border-primary hover:bg-primaryLight/30 transition-colors"
-                      >
-                        <div>
-                          <p className="font-medium text-ink">{r.display_id}</p>
-                          <p className="text-xs text-muted">{formatDateTime(r.pickup_by)}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={r.status} />
-                          <ChevronRight className="h-4 w-4 text-muted" />
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-    </AppShell>
-  );
+  return <AppShell title="Donor dashboard" nav="donor"><div className="space-y-5">
+    <section className="harvest-hero">
+      <div className="relative z-10 max-w-xl"><p className="eyebrow text-white/70">{organization?.name} · Hyderabad pilot</p><h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Good food.<br/>A better destination.</h2><p className="mt-3 max-w-md text-sm leading-relaxed text-white/80">Turn today's surplus into someone's next meal. Find a community partner and make the handoff count.</p><div className="mt-5 flex flex-wrap gap-2"><Link to="/donor/rescue/new" className="hero-cta"><Plus size={18}/> Post food</Link>{mine.data?.length ? <button onClick={repeatLast} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-semibold"><Repeat2 size={16}/> Repeat last listing</button> : null}</div></div><div className="food-art" aria-hidden="true"><span/><i/><b/></div>
+    </section>
+    {repeatError && <p role="alert" className="text-danger">{repeatError}</p>}
+    {(mine.isError || summary.isError || receivers.isError) && <div role="alert" className="rounded-xl bg-dangerLight p-3 text-sm text-danger">Some dashboard data could not load. <button className="underline" onClick={() => { void mine.refetch(); void summary.refetch(); void receivers.refetch(); }}>Try again</button></div>}
+    <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Donation overview">
+      <Metric label="Meals delivered" value={summary.data?.total_meals_rescued ?? "—"} note={`${summary.data?.meals_rescued_month ?? 0} this month`} icon={<Utensils size={18}/>}/>
+      <Metric label="Receivers available" value={receivers.isPending ? "—" : online.length} note={`${online.reduce((n,r) => n+r.available_servings,0)} servings of capacity`} icon={<Users size={18}/>}/>
+      <Metric label="Food rescued" value={`${summary.data?.food_kg_estimate ?? 0} kg`} note="Estimate · 0.4 kg per meal" icon={<Package size={18}/>}/>
+      <Metric label="Climate impact" value={`${summary.data?.co2e_kg_estimate ?? 0} kg`} note="Estimated CO₂e avoided" icon={<Leaf size={18}/>}/>
+    </section>
+    {active.length > 0 && <section><div className="section-heading"><h3>In progress <span className="text-muted">({active.length})</span></h3><span className="text-sm text-muted">Updates every 5 seconds</span></div><div className="grid gap-3 lg:grid-cols-2">{active.map(r => <Link key={r.id} to={`/donor/rescue/${r.id}`} className="rounded-2xl border border-primary/25 bg-white p-4 transition hover:shadow-md"><div className="flex flex-wrap items-center justify-between gap-2"><strong>{r.display_id}</strong><StatusBadge status={r.status}/></div><p className="my-2 text-sm text-muted">{r.total_servings} servings · {r.locality}</p>{r.status === "COLLECTED" ? <p className="text-sm font-semibold text-primary">Collected · awaiting delivery confirmation</p> : <RescueClock pickupBy={r.pickup_by}/>}</Link>)}</div></section>}
+    <section className="space-y-3" id="receiver-directory"><div className="section-heading"><div><p className="eyebrow text-primary">Your neighbourhood network</p><h3 className="mt-1">Find the right receiver</h3></div><button aria-label="Refresh receivers" onClick={() => void receivers.refetch()} className="icon-button"><RefreshCw size={18}/></button></div>
+      <div className="flex flex-wrap items-center gap-2"><select aria-label="Filter receivers by diet" value={diet} onChange={e => setDiet(e.target.value)}><option value="">Any dietary type</option>{DIETS.map(d => <option key={d} value={d}>{foodLabel(d)}</option>)}</select><select aria-label="Filter receivers by category" value={category} onChange={e => setCategory(e.target.value)}><option value="">Any food category</option>{CATEGORIES.map(d => <option key={d} value={d}>{foodLabel(d)}</option>)}</select><select aria-label="Sort receivers" value={sort} onChange={e => setSort(e.target.value)}><option value="distance">Nearest first</option><option value="trust">Highest trust</option><option value="need">Highest need</option></select><label className="flex min-h-12 items-center gap-2 text-sm"><input type="checkbox" checked={available} onChange={e => setAvailable(e.target.checked)}/>Available now</label><div className="ml-auto flex rounded-xl border border-border bg-white p-1"><button aria-pressed={view === "map"} onClick={() => setView("map")} className={`view-toggle ${view === "map" ? "selected" : ""}`}><Map size={16}/>Map</button><button aria-pressed={view === "list"} onClick={() => setView("list")} className={`view-toggle ${view === "list" ? "selected" : ""}`}><List size={16}/>List</button></div></div>
+      {receivers.isPending ? <Skeleton className="h-72 w-full"/> : directory.length === 0 ? <Card><h4 className="font-bold">No receivers match these filters</h4><p className="mt-1 text-sm text-muted">Try another food category or check back when partners are available.</p></Card> : <div className={view === "map" ? "grid gap-3 xl:grid-cols-2" : ""}>{view === "map" && <div><Suspense fallback={<Skeleton className="h-96 w-full"/>}><RescueMap pins={pins} showOnlyType="receiver" className="h-96 w-full overflow-hidden rounded-2xl border border-border"/></Suspense><p className="mt-2 text-sm text-muted">Receiver locations are approximate. Demo organizations only.</p></div>}<div className={`grid gap-3 ${view === "list" ? "lg:grid-cols-2" : "max-h-[440px] overflow-y-auto"}`}>{directory.map(r => <article key={r.id} className="rounded-2xl border border-border bg-white p-4"><div className="flex items-start justify-between gap-2"><div><h4 className="font-bold">{r.name}</h4><p className="mt-1 text-sm text-muted">{r.locality} · {r.distance_km} km</p></div><span className="rounded-lg bg-accentLight px-2 py-1 text-xs font-bold text-warn">{r.rank_badge}</span></div><div className="my-3 flex flex-wrap gap-2 text-sm"><span className="rounded-md bg-primaryLight/60 px-2 py-1 text-primary">{r.available ? `${r.available_servings} servings free` : "Currently paused"}</span><span className="rounded-md bg-background px-2 py-1">{foodLabel(r.need_level)} need</span></div><p className="text-sm text-muted">{r.description || (r.transport_available ? "Transport available for collection." : "Transport needs coordination.")}</p><p className="mt-2 text-sm text-muted">{r.accepted_dietary_types.length ? r.accepted_dietary_types.map(foodLabel).join(", ") : r.accepts_non_veg ? "Accepts vegetarian and non-vegetarian food" : "Vegetarian food only"}</p><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="text-sm text-muted">{r.rating ? `${r.rating}/5 · ${r.rating_count} reviews` : "No handoff reviews yet"}</span><Link to={`/messages?partner=${r.id}`} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primaryLight/70 px-3 text-sm font-semibold text-primary"><MessageCircle size={16}/>Chat & coordinate</Link></div></article>)}</div></div>}
+    </section>
+    <div className="grid gap-4 lg:grid-cols-2"><Card><div className="section-heading"><h3>Recent donations</h3><Link className="text-sm font-semibold text-primary" to="/donor/rescues">View history</Link></div>{mine.data?.length ? mine.data.slice(0,4).map(r => <Link key={r.id} to={`/donor/rescue/${r.id}`} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-3"><span className="text-sm"><strong>{r.display_id}</strong><br/><span className="text-muted">{r.total_servings} servings</span></span><StatusBadge status={r.status}/></Link>) : <p className="text-sm text-muted">Your first donation starts a new story. Post surplus to get started.</p>}</Card><Card variant="accent"><p className="eyebrow text-warn">Make it a weekly habit</p><h3 className="mt-2 text-xl font-bold">A little planning. Less food wasted.</h3><p className="mt-2 text-sm leading-relaxed text-muted">Check partner capacity before packaging. Use repeat listing to bring back your usual menu, then confirm fresh handling details and pickup times.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => navigate("/donor/impact")}>See your impact</Button><Link to="/pricing" className="inline-flex min-h-12 items-center px-3 text-sm font-semibold text-primary">Explore sponsor plans</Link></div></Card></div>
+  </div></AppShell>;
 }

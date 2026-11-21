@@ -23,6 +23,7 @@ from app.models.receiver_capacity import ReceiverCapacity
 from app.models.rescue import Rescue
 from app.services import geo
 from app.services.rescue_helpers import ensure_utc
+from app.services.capacity_service import free_servings
 
 WEIGHTS: dict[str, float] = {
     "proximity": 0.35,
@@ -62,6 +63,9 @@ class CandidateInput:
     verification_status: str
     organization_type: str
     recent_completed_count_24h: int
+    accepted_dietary_types: frozenset[str] = frozenset()
+    accepted_food_categories: frozenset[str] = frozenset()
+    excluded_allergens: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,9 @@ class RescueInput:
     pickup_by: datetime
     prepared_at: datetime
     rescue_status: str
+    food_categories: frozenset[str] = frozenset()
+    allergens: frozenset[str] = frozenset()
+    allergens_unknown: bool = False
 
 
 @dataclass
@@ -115,6 +122,12 @@ def _rejection_reasons(rescue: RescueInput, cand: CandidateInput, slack_minutes:
         reasons.append("Does not accept vegetarian food")
     if not cand.transport_available:
         reasons.append("No transport available")
+    if cand.accepted_dietary_types and not rescue.dietary_types.issubset(cand.accepted_dietary_types):
+        reasons.append("Food does not match accepted dietary types")
+    if cand.accepted_food_categories and not rescue.food_categories.issubset(cand.accepted_food_categories):
+        reasons.append("Food category is not accepted")
+    if cand.excluded_allergens and (rescue.allergens_unknown or rescue.allergens & cand.excluded_allergens):
+        reasons.append("Allergen restrictions cannot be met")
     if slack_minutes < 0:
         reasons.append("Cannot reach before pickup deadline")
     return reasons
@@ -169,6 +182,8 @@ def evaluate_candidates(
         travel = geo.travel_minutes(road_km)
         slack = minutes_to_pickup - travel - buffer_minutes
         reasons = _rejection_reasons(rescue, cand, slack)
+        if road_km > PROXIMITY_HORIZON_KM:
+            reasons.append("Outside the 15 km service area")
         result = CandidateResult(
             receiver_organization_id=cand.receiver_organization_id,
             receiver_name=cand.receiver_name,
@@ -225,7 +240,7 @@ def load_candidates(db: Session, rescue: Rescue, now: datetime) -> list[Candidat
                 longitude=org.longitude,
                 reliability=org.reliability,
                 available=capacity.available,
-                available_servings=capacity.available_servings,
+                available_servings=free_servings(db, capacity),
                 accepts_veg=capacity.accepts_veg,
                 accepts_non_veg=capacity.accepts_non_veg,
                 transport_available=capacity.transport_available,
@@ -233,6 +248,9 @@ def load_candidates(db: Session, rescue: Rescue, now: datetime) -> list[Candidat
                 verification_status=org.verification_status,
                 organization_type=org.organization_type,
                 recent_completed_count_24h=recent_counts.get(org.id, 0),
+                accepted_dietary_types=frozenset(capacity.accepted_dietary_types or []),
+                accepted_food_categories=frozenset(capacity.accepted_food_categories or []),
+                excluded_allergens=frozenset(a.lower() for a in (capacity.excluded_allergens or [])),
             )
         )
     return candidates
@@ -257,11 +275,14 @@ def match_rescue(
         latitude=rescue.latitude,
         longitude=rescue.longitude,
         total_servings=rescue.total_servings,
-        has_non_veg=DietaryType.NON_VEG.value in dietary_types,
+        has_non_veg=bool(dietary_types & {"NON_VEG", "HALAL", "OTHER", "UNKNOWN", "GLUTEN_FREE", "DIABETIC_FRIENDLY"}),
         dietary_types=dietary_types,
         pickup_by=ensure_utc(rescue.pickup_by),
         prepared_at=ensure_utc(rescue.prepared_at),
         rescue_status=rescue.status,
+        food_categories=frozenset(item.food_category for item in rescue.food_items),
+        allergens=frozenset(a.lower() for item in rescue.food_items for a in (item.allergens or [])),
+        allergens_unknown=any(item.allergen_info_unknown for item in rescue.food_items),
     )
     candidates = load_candidates(db, rescue, current)
     return evaluate_candidates(

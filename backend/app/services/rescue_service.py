@@ -35,7 +35,7 @@ ALLERGEN_NOTICE = (
 )
 DISPLAY_ID_ATTEMPTS = 5
 MATCHING_ERROR_REASON = "matching_error"
-_VEG_TYPES = frozenset({DietaryType.VEG.value, DietaryType.VEGAN.value})
+_VEG_TYPES = frozenset({DietaryType.VEG.value, DietaryType.VEGAN.value, DietaryType.JAIN.value, DietaryType.RAW_VEGAN.value})
 
 
 def iso_utc(dt: datetime | None) -> str | None:
@@ -58,6 +58,7 @@ def food_item_out(item: FoodItem) -> dict[str, Any]:
         "name": item.name,
         "quantity_servings": item.quantity_servings,
         "dietary_type": item.dietary_type,
+        "food_category": getattr(item, "food_category", "COOKED_MEAL"),
         "allergens": list(item.allergens or []),
         "allergen_info_unknown": item.allergen_info_unknown,
     }
@@ -85,6 +86,8 @@ def _validate(payload: RescueCreate, now: datetime, prepared_at: datetime, picku
         raise AppError("HANDLING_INFO_REQUIRED", "Select the current holding condition.", 422)
     if pickup_by <= now:
         raise AppError("PICKUP_IN_PAST", "The pickup deadline must be in the future.", 422)
+    if prepared_at > now:
+        raise AppError("PREPARED_IN_FUTURE", "Preparation time cannot be in the future.", 422)
     if pickup_by <= prepared_at:
         raise AppError(
             "PICKUP_BEFORE_PREPARED",
@@ -116,6 +119,7 @@ def _build_food_items(payload: RescueCreate, current: datetime) -> list[FoodItem
                 name=item.name,
                 quantity_servings=item.quantity_servings,
                 dietary_type=item.dietary_type.value,
+                food_category=item.food_category.value if hasattr(item, "food_category") else "COOKED_MEAL",
                 allergens=list(item.allergens),
                 allergen_info_unknown=item.allergen_info_unknown,
                 created_at=current,
@@ -152,6 +156,8 @@ def create_rescue(
     total = _validate(payload, current, prepared_at, pickup_by)
 
     org: Organization = donor_user.organization
+    if org.verification_status != "VERIFIED":
+        raise AppError("DONOR_NOT_VERIFIED", "Your organization must be verified before posting surplus.", 403)
     food_items = _build_food_items(payload, current)
     notes = payload.handling_notes.strip() if payload.handling_notes else None
     dietary = derive_dietary_type([item.dietary_type for item in food_items])
@@ -257,7 +263,14 @@ def can_view_rescue(db: Session, viewer: User, rescue: Rescue) -> bool:
     if viewer.organization_id == rescue.donor_organization_id:
         return True
     if _role(viewer) == UserRole.RECEIVER.value:
-        return has_offer_for_org(db, rescue.id, viewer.organization_id)
+        if has_offer_for_org(db, rescue.id, viewer.organization_id):
+            return True
+        if rescue.status in (RescueStatus.POSTED.value, RescueStatus.MATCHING.value, RescueStatus.OFFERED.value):
+            from app.services.matching_service import match_rescue
+            return any(c.feasible and c.receiver_organization_id == viewer.organization_id for c in match_rescue(db, rescue.id))
+        claimed = _accepted_offer(db, rescue)
+        if claimed and claimed.receiver_organization_id == viewer.organization_id:
+            return True
     return False
 
 
@@ -293,6 +306,7 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         ),
         "safety_notice": SAFETY_NOTICE,
         "created_at": iso_utc(rescue.created_at),
+        "collected_servings": rescue.handoff.collected_servings if (owner_view or receiver_claimed) and rescue.handoff else None,
     }
 
     if owner_view or receiver_claimed:
@@ -324,23 +338,24 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         # itself only returns a code while CLAIMED or COLLECTED.
         if is_donor_owner(viewer, rescue):
             data["pickup_code"] = get_pickup_code_for_donor(db, rescue)
-        if rescue.status == RescueStatus.DELIVERED.value and rescue.impact is not None:
-            handoff = rescue.handoff
-            minutes_to_delivery = None
-            if handoff is not None and handoff.delivered_at is not None:
-                elapsed = ensure_utc(handoff.delivered_at) - ensure_utc(rescue.created_at)
-                minutes_to_delivery = round(elapsed.total_seconds() / 60, 1)
-            data["impact"] = {
-                "delivered_servings": rescue.impact.delivered_servings,
-                "rejected_servings": handoff.rejected_servings if handoff is not None else None,
-                "collected_servings": handoff.collected_servings if handoff is not None else None,
-                "confirmed_kg": rescue.impact.confirmed_kg,
-                "minutes_to_delivery": minutes_to_delivery,
-            }
-        else:
-            data["impact"] = None
     elif receiver_claimed:
         data["status_events"] = _status_events(rescue)
+
+    if (owner_view or receiver_claimed) and rescue.status == RescueStatus.DELIVERED.value and rescue.impact is not None:
+        handoff = rescue.handoff
+        minutes_to_delivery = None
+        if handoff is not None and handoff.delivered_at is not None:
+            elapsed = ensure_utc(handoff.delivered_at) - ensure_utc(rescue.created_at)
+            minutes_to_delivery = round(elapsed.total_seconds() / 60, 1)
+        data["impact"] = {
+            "delivered_servings": rescue.impact.delivered_servings,
+            "rejected_servings": handoff.rejected_servings if handoff is not None else None,
+            "collected_servings": handoff.collected_servings if handoff is not None else None,
+            "confirmed_kg": rescue.impact.confirmed_kg,
+            "minutes_to_delivery": minutes_to_delivery,
+        }
+    elif "impact" not in data:
+        data["impact"] = None
     return data
 
 

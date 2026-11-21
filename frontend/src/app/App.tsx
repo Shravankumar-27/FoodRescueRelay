@@ -1,24 +1,27 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "../features/auth/AuthContext";
 import { ToastProvider } from "../features/toast/ToastContext";
 import Skeleton from "../components/ui/Skeleton";
 import RequireRole from "./RequireRole";
-import LandingPage from "../pages/LandingPage";
-import LoginPage from "../pages/LoginPage";
-import DonorHomePage from "../pages/donor/DonorHomePage";
-import CreateRescuePage from "../pages/donor/CreateRescuePage";
-import ActiveRescuePage from "../pages/donor/ActiveRescuePage";
-import RescueHistoryPage from "../pages/donor/RescueHistoryPage";
-import DonorImpactPage from "../pages/donor/DonorImpactPage";
-import ReceiverHomePage from "../pages/receiver/ReceiverHomePage";
-import ActivePickupPage from "../pages/receiver/ActivePickupPage";
-import CapacitySettingsPage from "../pages/receiver/CapacitySettingsPage";
-import ReceiverHistoryPage from "../pages/receiver/ReceiverHistoryPage";
-import AdminOverviewPage from "../pages/admin/AdminOverviewPage";
-import AdminOrganizationsPage from "../pages/admin/AdminOrganizationsPage";
-import AdminRescuesPage from "../pages/admin/AdminRescuesPage";
+const LandingPage = lazy(() => import("../pages/LandingPage"));
+const LoginPage = lazy(() => import("../pages/LoginPage"));
+const DonorHomePage = lazy(() => import("../pages/donor/DonorHomePage"));
+const CreateRescuePage = lazy(() => import("../pages/donor/CreateRescuePage"));
+const ActiveRescuePage = lazy(() => import("../pages/donor/ActiveRescuePage"));
+const RescueHistoryPage = lazy(() => import("../pages/donor/RescueHistoryPage"));
+const CommunityImpactPage = lazy(() => import("../pages/CommunityImpactPage"));
+const LeaderboardPage = lazy(() => import("../pages/LeaderboardPage"));
+const PricingPage = lazy(() => import("../pages/PricingPage"));
+const MessagesPage = lazy(() => import("../pages/MessagesPage"));
+const ReceiverHomePage = lazy(() => import("../pages/receiver/ReceiverHomePage"));
+const ActivePickupPage = lazy(() => import("../pages/receiver/ActivePickupPage"));
+const CapacitySettingsPage = lazy(() => import("../pages/receiver/CapacitySettingsPage"));
+const ReceiverHistoryPage = lazy(() => import("../pages/receiver/ReceiverHistoryPage"));
+const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage"));
+const AdminOrganizationsPage = lazy(() => import("../pages/admin/AdminOrganizationsPage"));
+const AdminRescuesPage = lazy(() => import("../pages/admin/AdminRescuesPage"));
 
 function RoleHome() {
   const { user, isReady } = useAuth();
@@ -57,7 +60,13 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <BrowserRouter>
+            <Suspense fallback={<div className="p-6"><Skeleton className="h-64 w-full" /></div>}>
             <Routes>
+              <Route path="/community/impact" element={<CommunityImpactPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/leaderboard" element={<RequireRole roles={["DONOR", "RECEIVER", "ADMIN"]}><LeaderboardPage /></RequireRole>} />
+              <Route path="/messages" element={<RequireRole roles={["DONOR", "RECEIVER"]}><MessagesPage /></RequireRole>} />
+              <Route path="/receiver/impact" element={<RequireRole roles={["RECEIVER"]}><CommunityImpactPage personal /></RequireRole>} />
               {/* Public routes */}
               <Route path="/home" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
@@ -100,7 +109,7 @@ export default function App() {
                 path="/donor/impact"
                 element={
                   <RequireRole roles={["DONOR"]}>
-                    <DonorImpactPage />
+                    <CommunityImpactPage personal />
                   </RequireRole>
                 }
               />
@@ -167,6 +176,7 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </ToastProvider>
       </AuthProvider>

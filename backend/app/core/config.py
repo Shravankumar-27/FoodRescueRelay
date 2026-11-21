@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-only-change-me"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
     DEMO_MODE: bool = True
     DISPATCH_OFFER_TIMEOUT_SECONDS: int = 120
     MATCHING_SAFETY_BUFFER_MINUTES: int = 10

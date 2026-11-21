@@ -51,6 +51,8 @@ class Organization(Base):
     private_address: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     private_phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     reliability: Mapped[float] = mapped_column(Float, default=0.5)
+    trust_score: Mapped[float] = mapped_column(Float, default=0.5)
+    rank_badge: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="NEW")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )

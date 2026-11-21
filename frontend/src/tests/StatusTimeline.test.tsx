@@ -31,4 +31,17 @@ describe("StatusTimeline", () => {
     const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items[1]).toBe("Matched (current)");
   });
+
+  it("does not describe an unmatched rescue as matched", () => {
+    render(<StatusTimeline events={[]} status="MATCHING" />);
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("Matching (current)");
+  });
+
+  it("preserves claimed progress on expiry without implying collection", () => {
+    render(<StatusTimeline events={[{to_status:"CLAIMED",created_at:"2026-11-22T00:00:00Z"}]} status="EXPIRED" />);
+    const items = screen.getAllByRole("listitem");
+    expect(items[2]).toHaveTextContent("Claimed (done)");
+    expect(items[3]).toHaveTextContent("Collection (pending)");
+    expect(screen.getByText(/Pickup window expired/)).toBeVisible();
+  });
 });

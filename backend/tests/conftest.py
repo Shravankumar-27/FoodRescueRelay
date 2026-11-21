@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 BACKEND_DIR = pathlib.Path(__file__).resolve().parent.parent
-TEST_DB_PATH = BACKEND_DIR / "data" / "_pytest.db"
+TEST_DB_PATH = BACKEND_DIR / "data" / f"_pytest_{os.getpid()}.db"
 _TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 if _TEST_DATABASE_URL:
     os.environ["DATABASE_URL"] = _TEST_DATABASE_URL
@@ -79,6 +79,18 @@ def test_database() -> Iterator[None]:
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_demo(test_database):
+    """Each regression starts with the same synthetic network, without prior claims."""
+    from app.db.base import Base
+    from app.seed.init_db import seed_demo
+    with SessionLocal() as session:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        seed_demo(session)
+        session.commit()
 
 
 @pytest.fixture

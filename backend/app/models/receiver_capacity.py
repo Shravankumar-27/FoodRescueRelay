@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Uuid, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -47,6 +47,10 @@ class ReceiverCapacity(Base):
     accepts_non_veg: Mapped[bool] = mapped_column(Boolean, default=True)
     transport_available: Mapped[bool] = mapped_column(Boolean, default=False)
     need_level: Mapped[str] = mapped_column(String(16), default=NeedLevel.MEDIUM.value)
+    accepted_dietary_types: Mapped[list] = mapped_column(JSON, default=list)
+    accepted_food_categories: Mapped[list] = mapped_column(JSON, default=list)
+    excluded_allergens: Mapped[list] = mapped_column(JSON, default=list)
+    description: Mapped[str] = mapped_column(String(500), default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

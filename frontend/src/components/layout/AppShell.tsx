@@ -1,7 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "../../lib/api";
+import type { InboxItem } from "../../pages/MessagesPage";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Home,
+  MessageCircle,
   History,
   BarChart3,
   BookOpen,
@@ -13,6 +17,8 @@ import {
   WifiOff,
   Utensils,
   Heart,
+  Trophy,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -30,16 +36,21 @@ const NAV_ITEMS: Record<NavKey, NavItem[]> = {
     { to: "/donor", label: "Home", icon: <Home className="h-5 w-5" />, end: true },
     { to: "/donor/rescues", label: "Rescues", icon: <History className="h-5 w-5" /> },
     { to: "/donor/impact", label: "Impact", icon: <BarChart3 className="h-5 w-5" /> },
+    { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
+    { to: "/pricing", label: "Plans & CSR", icon: <Sparkles className="h-5 w-5" /> },
   ],
   receiver: [
     { to: "/receiver", label: "Available", icon: <Utensils className="h-5 w-5" />, end: true },
     { to: "/receiver/capacity", label: "Settings", icon: <Settings className="h-5 w-5" /> },
+    { to: "/receiver/impact", label: "Impact", icon: <BarChart3 className="h-5 w-5" /> },
     { to: "/receiver/history", label: "History", icon: <History className="h-5 w-5" /> },
+    { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
   ],
   admin: [
     { to: "/admin", label: "Overview", icon: <BarChart3 className="h-5 w-5" />, end: true },
     { to: "/admin/organizations", label: "Organizations", icon: <Users className="h-5 w-5" /> },
     { to: "/admin/rescues", label: "Rescues", icon: <BookOpen className="h-5 w-5" /> },
+    { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
   ],
 };
 
@@ -60,8 +71,10 @@ export default function AppShell({
   children: ReactNode;
   backTo?: string;
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
+  const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => apiRequest<InboxItem[]>("/partners/inbox", { token }), enabled: !!token && user?.role !== "ADMIN", refetchInterval: 10000 });
+  const unread = (inbox.data ?? []).reduce((sum, item) => sum + item.unread, 0);
   const [online, setOnline] = useState<boolean>(() => navigator.onLine);
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -86,6 +99,7 @@ export default function AppShell({
   const bottomNav = (
     <nav
       aria-label="Main"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur-sm md:hidden"
     >
       <div className="mx-auto flex max-w-5xl">
@@ -119,7 +133,7 @@ export default function AppShell({
   );
 
   const desktopSidebar = (
-    <aside className="hidden w-56 shrink-0 md:block">
+    <aside className="hidden w-48 shrink-0 md:block">
       <div className="sticky top-16 flex flex-col gap-1 pt-4">
         {links.map((item) => (
           <NavLink
@@ -144,9 +158,10 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen bg-background">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:block focus:bg-white focus:p-3">Skip to content</a>
       {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-2 font-bold text-primary">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-sm font-black">
               R
@@ -154,10 +169,11 @@ export default function AppShell({
             <span className="hidden sm:inline">RescueRelay</span>
           </Link>
 
-          <div className="flex flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {backTo && (
               <button
                 type="button"
+                aria-label="Go back"
                 onClick={() => navigate(backTo)}
                 className="text-muted hover:text-ink text-sm"
               >
@@ -193,7 +209,9 @@ export default function AppShell({
 
             <span className="hidden text-sm text-muted sm:block">{user?.name ?? ""}</span>
 
+            {user?.role !== "ADMIN" && <Link to="/messages" aria-label={`Messages${unread ? `, ${unread} unread` : ""}`} className="relative flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:bg-primaryLight"><MessageCircle size={20}/>{unread > 0 && <span className="absolute right-0 top-0 rounded-full bg-urgent px-1.5 text-xs text-white">{unread}</span>}</Link>}
             <button
+              aria-label="Log out"
               type="button"
               onClick={handleLogout}
               title="Log out"
@@ -216,9 +234,9 @@ export default function AppShell({
       )}
 
       {/* Main layout: sidebar on desktop, full-width on mobile */}
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 pt-4 pb-28 md:pb-6">
+      <div className="mx-auto flex max-w-[1440px] gap-6 px-4 pt-4 pb-28 md:pb-6">
         {desktopSidebar}
-        <main className="min-w-0 flex-1">{children}</main>
+        <main id="main-content" className="min-w-0 flex-1">{children}<footer className="mt-6 border-t border-border pt-4 text-sm text-muted">Hyderabad demo · Synthetic organizations and locations. RescueRelay coordinates food donations; it does not certify food safety. <Link className="text-primary underline" to="/community/impact">Community impact</Link></footer></main>
       </div>
 
       {/* Mobile bottom nav */}

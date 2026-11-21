@@ -5,8 +5,10 @@ Importing this package registers the enums and every model module on
 """
 
 from app.db.base import Base
+from app.models.chat_message import ChatMessage
 from app.models.enums import (
     DietaryType,
+    FoodCategory,
     HandlingType,
     NeedLevel,
     OfferStatus,
@@ -26,6 +28,7 @@ from app.models.user import User
 
 __all__ = [
     "Base",
+    "ChatMessage",
     "FoodItem",
     "Handoff",
     "ImpactRecord",
@@ -36,3 +39,5 @@ __all__ = [
     "StatusEvent",
     "User",
 ]
+
+from app.models.community import PartnerMessage, PartnerRating

@@ -25,7 +25,7 @@ from app.models.base_types import new_uuid, utcnow
 
 RESCUE_STATUSES = ("POSTED", "MATCHING", "OFFERED", "CLAIMED", "COLLECTED", "DELIVERED", "EXPIRED", "CANCELLED")
 HANDLING_TYPES = ("HOT_HELD", "REFRIGERATED", "ROOM_TEMPERATURE", "OTHER", "UNKNOWN")
-DIETARY_TYPES = ("VEG", "NON_VEG", "VEGAN", "OTHER", "UNKNOWN")
+DIETARY_TYPES = ("VEG", "NON_VEG", "VEGAN", "JAIN", "HALAL", "GLUTEN_FREE", "DIABETIC_FRIENDLY", "RAW_VEGAN", "OTHER", "UNKNOWN")
 
 
 def _in_check(column: str, values: tuple[str, ...]) -> str:
@@ -65,7 +65,7 @@ class Rescue(Base):
     private_address: Mapped[str] = mapped_column(String(300))
     locality: Mapped[str] = mapped_column(String(200))
     total_servings: Mapped[int] = mapped_column(Integer)
-    dietary_type: Mapped[str] = mapped_column(String(16))
+    dietary_type: Mapped[str] = mapped_column(String(32))
     idempotency_key: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -112,7 +112,8 @@ class FoodItem(Base):
     )
     name: Mapped[str] = mapped_column(String(160))
     quantity_servings: Mapped[int] = mapped_column(Integer)
-    dietary_type: Mapped[str] = mapped_column(String(16))
+    dietary_type: Mapped[str] = mapped_column(String(32))
+    food_category: Mapped[str] = mapped_column(String(32), default="COOKED_MEAL")
     allergens: Mapped[list] = mapped_column(JSON, default=list)
     allergen_info_unknown: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

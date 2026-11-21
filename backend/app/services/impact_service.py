@@ -9,7 +9,7 @@ Scope rules:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -91,7 +91,19 @@ def impact_summary(
         minutes.append(elapsed.total_seconds() / 60)
 
     completed = len(rows)
+    weeks = []
+    monday = current.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=current.weekday())
+    for offset in range(7, -1, -1):
+        start = monday - timedelta(weeks=offset)
+        end = start + timedelta(weeks=1)
+        meals = sum(row.servings for row in rows if start <= ensure_utc(row.recorded_at) < end)
+        weeks.append({"week": start.strftime("%d %b"), "meals": meals, "co2e_kg": round(meals * .4 * 2.5, 1)})
     return {
+        "weekly": weeks,
+        "food_kg_estimate": round(total_meals * .4, 1),
+        "co2e_kg_estimate": round(total_meals * .4 * 2.5, 1),
+        "household_meal_equivalents": round(total_meals / 4, 1),
+        "assumptions": "Illustrative model: one delivered serving = one meal; 0.4 kg per meal; 2.5 kg CO2e per kg food. Household meal equivalents = meals / 4, not unique families. No measured water or methane savings are claimed.",
         "meals_rescued_month": meals_this_month,
         "total_meals_rescued": total_meals,
         "completed_rescues": completed,

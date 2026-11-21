@@ -44,6 +44,8 @@ def get_current_user(
         )
     if not user.is_active:
         raise AppError("USER_INACTIVE", "This account is inactive.", 403)
+    if user.organization.verification_status == "SUSPENDED":
+        raise AppError("ORGANIZATION_SUSPENDED", "This organization is suspended. Contact the administrator.", 403)
     return user
 
 

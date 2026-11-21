@@ -38,11 +38,15 @@ export default function StatusTimeline({
     }
   });
 
+  const stopped = status === "EXPIRED" || status === "CANCELLED";
+  if (stopped) {
+    STEPS.forEach((step, index) => { if (events.some(e => step.reachedBy.includes(e.to_status))) currentIndex = Math.max(currentIndex, index); });
+  }
   return (
     <ol className="flex flex-col gap-3">
       {STEPS.map((step, index) => {
         const state: StepState =
-          index < currentIndex ? "done" : index === currentIndex ? "current" : "pending";
+          (index < currentIndex || (stopped && index === currentIndex)) ? "done" : index === currentIndex ? "current" : "pending";
         const Icon = state === "done" ? Check : state === "current" ? CircleDot : Circle;
         const event = events.find((e) => e.to_status === step.key);
         const iconClass =
@@ -54,7 +58,7 @@ export default function StatusTimeline({
             <Icon aria-hidden="true" className={`mt-0.5 h-5 w-5 shrink-0 ${iconClass}`} />
             <div>
               <p className={labelClass}>
-                {step.label}
+                {step.key === "MATCHING" && (status === "MATCHING" || (stopped && !events.some(e => ["OFFERED", "CLAIMED", "COLLECTED", "DELIVERED"].includes(e.to_status)))) ? "Matching" : step.label}
                 <span className="sr-only"> ({state})</span>
               </p>
               {event && <p className="text-sm text-muted">{formatDateTime(event.created_at)}</p>}
@@ -62,6 +66,7 @@ export default function StatusTimeline({
           </li>
         );
       })}
+      {stopped && <li className="rounded-xl bg-accentLight p-3 text-sm font-semibold text-warn">{status === "EXPIRED" ? "Pickup window expired — do not collect" : "Rescue cancelled"}</li>}
     </ol>
   );
 }

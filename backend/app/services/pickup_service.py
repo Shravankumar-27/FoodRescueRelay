@@ -18,6 +18,7 @@ from app.models.rescue import Rescue
 from app.models.user import User
 from app.services.handoff_service import verify_pickup_code
 from app.services.status import transition_rescue
+from app.services.rescue_helpers import ensure_utc
 
 IMPACT_CALCULATION_VERSION = "v1"
 
@@ -59,6 +60,10 @@ def collect_rescue(
     On a wrong code the failed attempt is committed before AppError is raised.
     """
     _require_accepted_receiver(db, rescue, receiver_user)
+    if rescue.status == RescueStatus.CLAIMED.value and ensure_utc(rescue.pickup_by) <= ensure_utc(now):
+        transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason="pickup_window_ended")
+        db.commit()
+        raise AppError("PICKUP_WINDOW_ENDED", "The pickup deadline has passed. Do not collect this food.", 409)
     if rescue.status != RescueStatus.CLAIMED.value:
         raise AppError("INVALID_STATUS_TRANSITION", "This rescue is not ready for pickup.", 409)
     if not 1 <= collected_servings <= rescue.total_servings:
@@ -134,5 +139,7 @@ def deliver_rescue(
         if existing is None:
             raise
         return existing
+    from app.services.trust_service import compute_trust_scores
+    compute_trust_scores(db)
     db.commit()
     return impact

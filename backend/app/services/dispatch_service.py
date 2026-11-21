@@ -108,7 +108,7 @@ def _create_offer(
         estimated_travel_minutes=result.travel_minutes,
         status=OfferStatus.PENDING.value,
         offered_at=now,
-        expires_at=now + timedelta(seconds=timeout),
+        expires_at=min(now + timedelta(seconds=timeout), ensure_utc(rescue.pickup_by)),
         created_at=now,
     )
     db.add(offer)
@@ -133,19 +133,23 @@ def start_dispatch(db: Session, rescue: Rescue, now: datetime | None = None) -> 
     status = RescueStatus(rescue.status)
     if status not in (RescueStatus.POSTED, RescueStatus.MATCHING):
         return 0
+    if ensure_utc(rescue.pickup_by) <= current:
+        transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason=PICKUP_WINDOW_ENDED_REASON)
+        return 0
     if _has_pending(db, rescue.id):
         return 0
 
-    ranked = feasible_ranked(match_rescue(db, rescue.id, current))
+    candidate = _next_candidate(db, rescue, current)
     if status is RescueStatus.POSTED:
         transition_rescue(db, rescue, RescueStatus.MATCHING, None, reason=MATCHING_STARTED_REASON)
 
-    if not ranked:
-        if _last_event_reason(db, rescue.id) != NO_FEASIBLE_REASON:
+    if candidate is None:
+        if _last_event_reason(db, rescue.id) not in (NO_FEASIBLE_REASON, NO_CANDIDATES_REASON):
             _add_same_status_event(db, rescue, RescueStatus.MATCHING, NO_FEASIBLE_REASON)
         return 0
 
-    _create_offer(db, rescue, ranked[0], 1, current)
+    rank, result = candidate
+    _create_offer(db, rescue, result, rank, current)
     transition_rescue(db, rescue, RescueStatus.OFFERED, None, reason=OFFER_SENT_REASON)
     return 1
 
@@ -189,7 +193,32 @@ def advance_expired_offers(db: Session, now: datetime | None = None) -> int:
         if rescue is not None:
             dispatch_next(db, rescue, current)
         processed += 1
+    sweep_expired_matching(db, current)
+    for rescue in db.scalars(select(Rescue).where(Rescue.status.in_(["POSTED", "MATCHING"]), Rescue.pickup_by > current)).all():
+        start_dispatch(db, rescue, current)
     return processed
+
+
+def sweep_expired_matching(db: Session, now: datetime | None = None) -> int:
+    """Mark uncollected rescues as EXPIRED when their pickup window has closed."""
+    current = _now(now)
+    uncollected = db.scalars(
+        select(Rescue).where(
+            Rescue.status.in_([
+                RescueStatus.POSTED.value,
+                RescueStatus.MATCHING.value,
+                RescueStatus.OFFERED.value,
+                RescueStatus.CLAIMED.value,
+            ])
+        )
+    ).all()
+    swept = 0
+    for rescue in uncollected:
+        if ensure_utc(rescue.pickup_by) <= current:
+            cancel_pending_offers(db, rescue.id)
+            transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason=PICKUP_WINDOW_ENDED_REASON)
+            swept += 1
+    return swept
 
 
 def decline_offer(

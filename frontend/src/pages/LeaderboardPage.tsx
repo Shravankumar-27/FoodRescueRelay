@@ -1,0 +1,17 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Trophy } from "lucide-react";
+import AppShell from "../components/layout/AppShell";
+import Card from "../components/ui/Card";
+import { useAuth } from "../features/auth/AuthContext";
+import { apiRequest } from "../lib/api";
+import type { LeaderboardData } from "../types/api";
+export default function LeaderboardPage() {
+  const { token, user } = useAuth();
+  const [tab, setTab] = useState<"donors" | "receivers">("donors");
+  const [area, setArea] = useState("");
+  const data = useQuery({ queryKey: ["leaderboard"], queryFn: () => apiRequest<LeaderboardData>("/impact/leaderboard", { token }), refetchInterval: 30000 });
+  const rows = data.data?.[tab] ?? [];
+  const filtered = rows.filter(r => !area || r.locality === area);
+  return <AppShell title="Community rankings" nav={user?.role === "DONOR" ? "donor" : user?.role === "ADMIN" ? "admin" : "receiver"}><section className="harvest-hero mb-5"><Trophy className="mb-3 text-amber-300"/><p className="eyebrow text-white/70">Every handoff matters</p><h2 className="mt-2 text-3xl font-bold">Meet the people making it happen.</h2><p className="mt-3 text-sm text-white/80">Ranked by receiver-confirmed meals, then trust. Real activity from our synthetic demo network.</p></section><div className="mb-4 flex flex-wrap items-center gap-2">{(["donors","receivers"] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => { setTab(t); setArea(""); }} className={`view-toggle ${tab === t ? "selected" : ""}`}>Top {t}</button>)}<select aria-label="Filter rankings by locality" value={area} onChange={e => setArea(e.target.value)} className="ml-auto"><option value="">All localities</option>{[...new Set(rows.map(r => r.locality))].map(a => <option key={a}>{a}</option>)}</select></div>{data.isError && <p role="alert" className="text-danger">{data.error.message}</p>}{data.isPending ? <p>Loading rankings…</p> : filtered.length === 0 ? <Card>No partners in this area yet.</Card> : <div className="space-y-3">{filtered.map((r,i) => <Card key={r.name} className="flex flex-wrap items-center gap-4"><span className={`flex h-11 w-11 items-center justify-center rounded-xl font-extrabold ${i === 0 ? "bg-accentLight text-warn" : "bg-background text-primary"}`}>#{i+1}</span><div className="min-w-40 flex-1"><h3 className="font-bold">{r.name}</h3><p className="mt-1 text-sm text-muted">{r.locality} · {r.badge}</p></div><div><p className="text-xl font-extrabold">{r.meals.toLocaleString()}</p><p className="text-sm text-muted">meals delivered</p></div><div className="min-w-32 text-sm"><p>{r.completion_rate === null ? "No completed outcomes" : `${Math.round(r.completion_rate*100)}% completion`}</p><p className="mt-1 text-muted">{r.rating ? `${r.rating}/5 · ${r.rating_count} reviews` : "No handoff ratings yet"}</p></div></Card>)}</div>}<Card className="mt-5 text-sm text-muted"><h3 className="mb-2 font-bold text-ink">What the badges mean</h3><p>Trust combines completed outcomes (40%), demo reliability (30%) and handoff ratings (30%). Gold ≥ 85%, silver ≥ 70%, bronze ≥ 50%. New partners stay NEW until they have completed outcomes. Missing feedback uses a neutral baseline. Ratings describe handoff experience, not food safety or independent place reviews.</p></Card></AppShell>;
+}
