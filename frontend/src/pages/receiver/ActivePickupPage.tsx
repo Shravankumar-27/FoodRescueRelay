@@ -136,7 +136,7 @@ export default function ActivePickupPage() {
           </>}
         </Card>}
         {claimed && <PickupLogistics rescueId={rescueId} side="receiver"/>}
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           {claimed && <Card>
             <h3 className="text-lg font-bold">Confirm collection</h3>
             <p className="mt-1 text-sm">{d.private_address || d.locality} · by {formatDateTime(d.pickup_by)}</p>
@@ -181,15 +181,19 @@ export default function ActivePickupPage() {
             </form>
           </Card>}
 
-          {isDelivered && <Card variant="fresh">
-            <h3 className="text-xl font-bold">{deliveredMeals} meals delivered</h3>
-            {!!d.impact?.rejected_servings && <p className="text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Link to="/receiver/impact" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline">View impact</Link>
-              {allocationLink}
+          {isDelivered && <div className="flex flex-col gap-4">
+          <Card variant="fresh">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Delivery confirmed</p>
+            <h3 className="mt-1 text-2xl font-bold">{deliveredMeals.toLocaleString("en-IN")} meals delivered</h3>
+            {!!d.impact?.rejected_servings && <p className="mt-1 text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Link to="/receiver/impact" className="inline-flex min-h-10 items-center rounded-lg bg-white/80 px-3 text-sm font-semibold text-primary hover:bg-white">View impact</Link>
+              <Link to={`/receiver/planner?rescue=${rescueId}`} className="inline-flex min-h-10 items-center rounded-lg border border-primary/20 px-3 text-sm font-semibold text-primary hover:bg-white/70">Open allocation planner</Link>
             </div>
-          </Card>}
-          <Card className={hasPickupActions ? "" : "lg:col-span-2"}>
+          </Card>
+          <PartnerRating rescueId={rescueId}/>
+          </div>}
+          <Card className={!hasPickupActions && !isDelivered ? "lg:col-span-2" : ""}>
             <h3 className="mb-2 font-bold">Food and handling</h3>
             {d.food_items.map((item, index) => <div key={index} className="border-t border-border py-2 text-sm">
               <p className="font-semibold">{item.name} · {item.quantity_servings} servings</p>
@@ -206,7 +210,6 @@ export default function ActivePickupPage() {
           <MealFeedback key={rescueId} rescueId={rescueId}/>
         </div>}
         {hasPickupActions && <div className={isDelivered ? "grid gap-4 lg:grid-cols-2" : ""}>
-          {isDelivered && <PartnerRating rescueId={rescueId}/>}
           <ChatBox rescueId={rescueId} recipientName={d.donor_organization_name}/>
         </div>}
       </div>}
