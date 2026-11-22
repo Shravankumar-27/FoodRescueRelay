@@ -1,5 +1,5 @@
 """Idempotent upgrade for existing demo databases and Alembic deployments."""
-from sqlalchemy import inspect, Column, Float, String, JSON, text, Uuid
+from sqlalchemy import inspect, Boolean, Column, Float, Integer, String, JSON, text, Uuid
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
@@ -30,3 +30,18 @@ def upgrade_schema(connection):
                 batch.create_check_constraint(constraint["name"], f"dietary_type IN ({values})")
     if inspect(connection).has_table("chat_messages") and "offer_id" not in {c["name"] for c in inspect(connection).get_columns("chat_messages")}:
         ops.add_column("chat_messages", Column("offer_id", Uuid, nullable=True))
+
+def upgrade_handoff_workflows(connection):
+    ops = Operations(MigrationContext.configure(connection))
+    for table, columns in {
+        "rescues": [Column("donor_transport_available", Boolean, server_default=text("false"), nullable=False)],
+        "receiver_capacities": [
+            Column("containers_available", Boolean, server_default=text("true"), nullable=False),
+            Column("refrigeration_available", Boolean, server_default=text("false"), nullable=False),
+            Column("volunteer_servings", Integer, nullable=True),
+        ],
+    }.items():
+        existing = {c["name"] for c in inspect(connection).get_columns(table)}
+        for column in columns:
+            if column.name not in existing:
+                ops.add_column(table, column)

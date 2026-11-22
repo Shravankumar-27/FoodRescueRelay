@@ -20,15 +20,16 @@ from app.models.enums import OfferStatus, RescueStatus, UserRole
 from app.models.handoff import Handoff
 from app.models.offer import MatchOffer
 from app.models.rescue import Rescue
-from app.models.status_event import StatusEvent
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.receiver_capacity import ReceiverCapacity
 from app.services.dispatch_service import advance_expired_offers, decline_offer
 from app.services.handoff_service import store_pickup_code
+from app.services.logistics_service import logistics_for
 from app.services.matching_service import match_rescue
 from app.services.rescue_helpers import ensure_utc, seconds_remaining
 from app.services.rescue_service import SAFETY_NOTICE, food_item_out, iso_utc
+from app.services.status import lock_rescue, transition_rescue
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 
@@ -74,7 +75,8 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
     db.execute(update(ReceiverCapacity).where(ReceiverCapacity.organization_id == user.organization_id).values(updated_at=now))
 
     offer = _load_own_offer(db, offer_id, user)
-    rescue = db.get(Rescue, offer.rescue_id)
+    rescue = lock_rescue(db, offer.rescue_id)
+    offer = _load_own_offer(db, offer_id, user)
     if rescue and db.get(Organization, rescue.donor_organization_id).verification_status != "VERIFIED":
         raise AppError("DONOR_UNAVAILABLE", "This donor is not currently verified.", 409)
     if rescue is None or ensure_utc(rescue.pickup_by) <= now:
@@ -85,7 +87,10 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
     if candidate is None or not candidate.feasible:
         raise AppError("NOT_ELIGIBLE", "Your current food preferences, capacity or pickup timing do not match this rescue.", 409)
 
-    # Step 1: conditional accept of this offer. Only one request can flip it.
+    if rescue.status not in ("POSTED", "MATCHING", "OFFERED"):
+        raise AppError("RESCUE_ALREADY_CLAIMED", "This rescue is no longer available to claim.", 409)
+
+    # The rescue lock protects this offer and its sibling offers.
     result = db.execute(
         update(MatchOffer)
         .where(
@@ -100,26 +105,9 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
     if result.rowcount != 1:
         raise _claim_failure(db, offer_id, user, now)
 
-    rescue_id = db.scalar(select(MatchOffer.rescue_id).where(MatchOffer.id == offer_id))
-
-    previous_status = rescue.status
-    # Step 2: conditional claim of the rescue itself.
-    rescue_result = db.execute(
-        update(Rescue)
-        .where(Rescue.id == rescue_id, Rescue.status.in_(["POSTED", "MATCHING", "OFFERED"]), Rescue.pickup_by > now)
-        .values(status=RescueStatus.CLAIMED.value, updated_at=now)
-        .execution_options(synchronize_session=False)
-    )
-    if rescue_result.rowcount != 1:
-        raise AppError(
-            "RESCUE_ALREADY_CLAIMED",
-            "This rescue was just accepted by another receiver.",
-            409,
-        )
-
-    rescue = db.scalar(
-        select(Rescue).where(Rescue.id == rescue_id).execution_options(populate_existing=True)
-    )
+    rescue_id = rescue.id
+    transition_rescue(db, rescue, RescueStatus.CLAIMED, user.id, reason=CLAIM_REASON)
+    db.add(logistics_for(db, rescue, offer))
 
     # Step 3: close every other open offer for this rescue.
     db.execute(
@@ -144,17 +132,6 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
     store_pickup_code(handoff, code)
     db.add(handoff)
 
-    # Step 5: audit trail.
-    db.add(
-        StatusEvent(
-            rescue_id=rescue_id,
-            actor_user_id=user.id,
-            from_status=previous_status,
-            to_status=RescueStatus.CLAIMED.value,
-            reason=CLAIM_REASON,
-            created_at=now,
-        )
-    )
     db.flush()
 
     return {
@@ -258,7 +235,8 @@ def claim_offer(
             actual_offer_id = parsed_id
             if offer_id.startswith("open_"):
                 now = utcnow()
-                rescue = db.get(Rescue, parsed_id)
+                db.execute(update(ReceiverCapacity).where(ReceiverCapacity.organization_id == user.organization_id).values(updated_at=now))
+                rescue = lock_rescue(db, parsed_id)
                 if rescue is None or rescue.status not in ("POSTED", "MATCHING", "OFFERED") or ensure_utc(rescue.pickup_by) <= now:
                     raise AppError("OFFER_EXPIRED", "This rescue is no longer available.", 409)
                 candidate = _eligible(db, rescue, user, now)
@@ -306,16 +284,28 @@ def decline(
 ) -> dict[str, Any]:
     if offer_id.startswith("open_"):
         try:
-            rescue = db.get(Rescue, uuid.UUID(offer_id[5:]))
+            rescue = lock_rescue(db, uuid.UUID(offer_id[5:]))
         except ValueError:
             raise AppError("INVALID_OFFER", "Invalid offer identifier.", 422)
-        candidate = _eligible(db, rescue, user, utcnow()) if rescue else None
+        now = utcnow()
+        candidate = _eligible(db, rescue, user, now) if rescue and rescue.status in ("POSTED", "MATCHING", "OFFERED") else None
         if candidate is None:
             raise AppError("OFFER_NOT_FOUND", "Offer was not found.", 404)
+        previous = db.scalars(select(MatchOffer).where(
+            MatchOffer.rescue_id == rescue.id, MatchOffer.receiver_organization_id == user.organization_id,
+            MatchOffer.status.in_((OfferStatus.DECLINED.value, OfferStatus.PENDING.value)),
+        )).all()
+        if any(offer.status == OfferStatus.DECLINED.value for offer in previous):
+            return ok({"offer_id": offer_id, "status": OfferStatus.DECLINED.value}, _request_id(request))
+        pending = next((offer for offer in previous if offer.status == OfferStatus.PENDING.value), None)
+        if pending:
+            decline_offer(db, pending, user.id, now)
+            db.commit()
+            return ok({"offer_id": offer_id, "status": OfferStatus.DECLINED.value}, _request_id(request))
         db.add(MatchOffer(rescue_id=rescue.id, receiver_organization_id=user.organization_id, rank=1,
             score=candidate.score, proximity_score=0, urgency_score=0, need_score=0, reliability_score=0, fairness_score=0,
             estimated_distance_km=candidate.distance_km, estimated_travel_minutes=candidate.travel_minutes,
-            status="DECLINED", offered_at=utcnow(), expires_at=rescue.pickup_by))
+            status="DECLINED", offered_at=now, expires_at=rescue.pickup_by))
         db.commit()
         return ok({"offer_id": offer_id, "status": OfferStatus.DECLINED.value}, _request_id(request))
     try:
@@ -323,6 +313,10 @@ def decline(
     except ValueError:
         raise AppError("INVALID_OFFER", "Invalid offer identifier.", 422)
     offer = _load_own_offer(db, actual_offer_id, user)
+    lock_rescue(db, offer.rescue_id)
+    offer = _load_own_offer(db, actual_offer_id, user)
+    if offer.status == OfferStatus.DECLINED.value and offer.claimed_at is None:
+        return ok({"offer_id": offer_id, "status": OfferStatus.DECLINED.value}, _request_id(request))
     if offer.status != OfferStatus.PENDING.value:
         raise AppError("OFFER_NOT_PENDING", "This offer is no longer available.", 409)
     decline_offer(db, offer, user.id, utcnow())

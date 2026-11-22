@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -25,7 +25,7 @@ from app.models.rescue import Rescue
 from app.models.status_event import StatusEvent
 from app.services.matching_service import CandidateResult, feasible_ranked, match_rescue
 from app.services.rescue_helpers import ensure_utc
-from app.services.status import transition_rescue
+from app.services.status import lock_rescue, transition_rescue
 
 MATCHING_STARTED_REASON = "matching_started"
 OFFER_SENT_REASON = "offer_sent"
@@ -154,6 +154,30 @@ def start_dispatch(db: Session, rescue: Rescue, now: datetime | None = None) -> 
     return 1
 
 
+def offer_replacement(db: Session, rescue: Rescue, receiver_id: uuid.UUID, now: datetime) -> None:
+    if rescue.status not in ("MATCHING", "OFFERED") or ensure_utc(rescue.pickup_by) <= now:
+        raise AppError("REPLACEMENT_UNAVAILABLE", "This rescue is no longer open for reassignment.", 409)
+    declined = db.scalar(select(MatchOffer.id).where(
+        MatchOffer.rescue_id == rescue.id, MatchOffer.receiver_organization_id == receiver_id,
+        MatchOffer.status == OfferStatus.DECLINED.value,
+    ).limit(1))
+    ranked = feasible_ranked(match_rescue(db, rescue.id, now))
+    chosen = next(((rank, candidate) for rank, candidate in enumerate(ranked, 1)
+                   if candidate.receiver_organization_id == receiver_id), None)
+    if declined or chosen is None:
+        raise AppError("RECEIVER_UNAVAILABLE", "That receiver can no longer take this donation. Choose another partner.", 409)
+    if any(offer.receiver_organization_id == receiver_id and ensure_utc(offer.expires_at) > now
+           for offer in _pending_offers(db, rescue.id)):
+        return
+    cancel_pending_offers(db, rescue.id)
+    rank, candidate = chosen
+    _create_offer(db, rescue, candidate, rank, now)
+    if rescue.status == "MATCHING":
+        transition_rescue(db, rescue, RescueStatus.OFFERED, None, reason=OFFER_SENT_REASON)
+    else:
+        _add_same_status_event(db, rescue, RescueStatus.OFFERED, OFFER_SENT_REASON)
+
+
 def dispatch_next(db: Session, rescue: Rescue, now: datetime | None = None) -> None:
     """Offer the rescue to the next receiver, or leave it MATCHING / EXPIRED."""
     current = _now(now)
@@ -162,16 +186,17 @@ def dispatch_next(db: Session, rescue: Rescue, now: datetime | None = None) -> N
     if _has_pending(db, rescue.id):
         return
 
+    if ensure_utc(rescue.pickup_by) <= current:
+        transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason=PICKUP_WINDOW_ENDED_REASON)
+        return
+
     found = _next_candidate(db, rescue, current)
     if found is not None:
         rank, result = found
         _create_offer(db, rescue, result, rank, current)
         return
 
-    if ensure_utc(rescue.pickup_by) <= current:
-        transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason=PICKUP_WINDOW_ENDED_REASON)
-    else:
-        transition_rescue(db, rescue, RescueStatus.MATCHING, None, reason=NO_CANDIDATES_REASON)
+    transition_rescue(db, rescue, RescueStatus.MATCHING, None, reason=NO_CANDIDATES_REASON)
 
 
 def advance_expired_offers(db: Session, now: datetime | None = None) -> int:
@@ -180,45 +205,34 @@ def advance_expired_offers(db: Session, now: datetime | None = None) -> int:
     Returns the number of offers processed.
     """
     current = _now(now)
-    pending = db.scalars(
-        select(MatchOffer).where(MatchOffer.status == OfferStatus.PENDING.value)
-    ).all()
-    expired = [offer for offer in pending if ensure_utc(offer.expires_at) <= current]
-
+    expired_offers = select(MatchOffer.rescue_id).where(
+        MatchOffer.status == OfferStatus.PENDING.value, MatchOffer.expires_at <= current
+    )
+    active_statuses = ("POSTED", "MATCHING", "OFFERED", "CLAIMED")
+    rescue_ids = db.scalars(select(Rescue.id).where(
+        Rescue.status.in_(active_statuses),
+        or_(Rescue.status.in_(("POSTED", "MATCHING")), Rescue.pickup_by <= current, Rescue.id.in_(expired_offers)),
+    ).order_by(Rescue.id)).all()
     processed = 0
-    for offer in expired:
-        offer.status = OfferStatus.TIMED_OUT.value
-        db.flush()
-        rescue = db.get(Rescue, offer.rescue_id)
-        if rescue is not None:
-            dispatch_next(db, rescue, current)
-        processed += 1
-    sweep_expired_matching(db, current)
-    for rescue in db.scalars(select(Rescue).where(Rescue.status.in_(["POSTED", "MATCHING"]), Rescue.pickup_by > current)).all():
-        start_dispatch(db, rescue, current)
-    return processed
-
-
-def sweep_expired_matching(db: Session, now: datetime | None = None) -> int:
-    """Mark uncollected rescues as EXPIRED when their pickup window has closed."""
-    current = _now(now)
-    uncollected = db.scalars(
-        select(Rescue).where(
-            Rescue.status.in_([
-                RescueStatus.POSTED.value,
-                RescueStatus.MATCHING.value,
-                RescueStatus.OFFERED.value,
-                RescueStatus.CLAIMED.value,
-            ])
-        )
-    ).all()
-    swept = 0
-    for rescue in uncollected:
+    for rescue_id in rescue_ids:
+        rescue = lock_rescue(db, rescue_id)
+        if rescue is None or rescue.status not in active_statuses:
+            continue
+        expired = [offer for offer in _pending_offers(db, rescue.id) if ensure_utc(offer.expires_at) <= current]
+        for offer in expired:
+            offer.status = OfferStatus.TIMED_OUT.value
+        if expired:
+            processed += len(expired)
+            db.flush()
         if ensure_utc(rescue.pickup_by) <= current:
             cancel_pending_offers(db, rescue.id)
             transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason=PICKUP_WINDOW_ENDED_REASON)
-            swept += 1
-    return swept
+        elif rescue.status == RescueStatus.OFFERED.value and expired:
+            dispatch_next(db, rescue, current)
+        elif rescue.status in ("POSTED", "MATCHING"):
+            start_dispatch(db, rescue, current)
+        db.flush()
+    return processed
 
 
 def decline_offer(

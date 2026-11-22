@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "../pages/LoginPage";
 import { AuthProvider } from "../features/auth/AuthContext";
+import { ToastProvider } from "../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../lib/api";
 
 vi.mock("../lib/api", async (importOriginal) => {
@@ -13,7 +14,7 @@ vi.mock("../lib/api", async (importOriginal) => {
 });
 
 describe("LoginPage", () => {
-  it("shows an inline error when sign-in is rejected", async () => {
+  it("shows an error toast when sign-in is rejected", async () => {
     vi.mocked(apiRequest).mockRejectedValue(
       new ApiError("INVALID_CREDENTIALS", "Invalid email or password.", 401),
     );
@@ -22,7 +23,7 @@ describe("LoginPage", () => {
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
           <AuthProvider>
-            <LoginPage />
+            <ToastProvider><LoginPage /></ToastProvider>
           </AuthProvider>
         </MemoryRouter>
       </QueryClientProvider>,

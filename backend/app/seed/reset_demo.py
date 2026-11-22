@@ -64,9 +64,14 @@ def reset_demo(session) -> None:
 
 
 def main() -> None:
+    from app.core.config import get_settings
+    from app.seed.seed_extended import seed_extended
+    if not get_settings().DEMO_MODE:
+        raise RuntimeError("Demo reset requires DEMO_MODE.")
     session = SessionLocal()
     try:
         reset_demo(session)
+        seed_extended(session)
         session.commit()
     except Exception:
         session.rollback()

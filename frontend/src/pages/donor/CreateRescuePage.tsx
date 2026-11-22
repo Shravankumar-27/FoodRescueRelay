@@ -11,6 +11,7 @@ import Input from "../../components/ui/Input";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useToast } from "../../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../../lib/api";
+import { randomId } from "../../lib/randomId";
 import type { RescueDetail } from "../../types/api";
 
 type FoodRow = {
@@ -27,6 +28,7 @@ type Draft = {
   untouched: "" | "yes" | "no";
   holding: string;
   packaging: boolean;
+  delivery: boolean;
   notes: string;
   prepared: string;
   pickup: string;
@@ -152,9 +154,10 @@ function validateFood(rows: FoodRow[]): Record<number, FoodErr> {
   rows.forEach((r, i) => {
     const e: FoodErr = {};
     if (!r.name.trim()) e.name = "Enter a food name.";
+    else if (r.name.trim().length > 160) e.name = "Use 160 characters or fewer.";
     const q = Number(r.quantity);
-    if (!r.quantity.trim() || !Number.isInteger(q) || q <= 0) {
-      e.quantity = "Enter the number of servings, greater than 0.";
+    if (!r.quantity.trim() || !Number.isInteger(q) || q < 1 || q > 100000) {
+      e.quantity = "Enter a whole number from 1 to 100,000.";
     }
     if (e.name || e.quantity) errs[i] = e;
   });
@@ -166,6 +169,7 @@ function validateTiming(prepared: string, pickup: string, attest: boolean): Reco
   const p = new Date(prepared);
   const k = new Date(pickup);
   if (!prepared || Number.isNaN(p.getTime())) errs.prepared = "Enter when the food was prepared.";
+  else if (p.getTime() > Date.now()) errs.prepared = "Preparation time cannot be in the future.";
   if (!pickup || Number.isNaN(k.getTime())) {
     errs.pickup = "Enter a pickup deadline.";
   } else if (k.getTime() <= Date.now()) {
@@ -229,10 +233,10 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
 export default function CreateRescuePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast, error: toastError } = useToast();
 
   const idemRef = useRef<string>("");
-  if (!idemRef.current) idemRef.current = crypto.randomUUID().replace(/-/g, "");
+  if (!idemRef.current) idemRef.current = randomId();
 
   const [draft] = useState<Partial<Draft> | null>(() => readDraft());
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -246,6 +250,7 @@ export default function CreateRescuePage() {
   const [untouched, setUntouched] = useState<"" | "yes" | "no">(draft?.untouched ?? "");
   const [holding, setHolding] = useState<string>(draft?.holding ?? "");
   const [packaging, setPackaging] = useState<boolean>(draft?.packaging ?? false);
+  const [delivery, setDelivery] = useState(draft?.delivery ?? false);
   const [notes, setNotes] = useState<string>(draft?.notes ?? "");
   const [handErrs, setHandErrs] = useState<Record<string, string>>({});
 
@@ -258,7 +263,6 @@ export default function CreateRescuePage() {
   const [locality, setLocality] = useState<string>(draft?.locality ?? "");
   const [attest, setAttest] = useState<boolean>(draft?.attest ?? false);
   const [timingErrs, setTimingErrs] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [customTime, setCustomTime] = useState(false);
 
   useEffect(() => {
@@ -267,7 +271,7 @@ export default function CreateRescuePage() {
 
   // Autosave draft
   useEffect(() => {
-    const d: Draft = { rows, untouched, holding, packaging, notes, prepared, pickup, locality, attest };
+    const d: Draft = { rows, untouched, holding, packaging, delivery, notes, prepared, pickup, locality, attest };
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
       setDraftSaved(true);
@@ -276,7 +280,7 @@ export default function CreateRescuePage() {
     } catch {
       // best-effort
     }
-  }, [rows, untouched, holding, packaging, notes, prepared, pickup, locality, attest]);
+  }, [rows, untouched, holding, packaging, delivery, notes, prepared, pickup, locality, attest]);
 
   function updateRow(i: number, patch: Partial<FoodRow>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -325,6 +329,7 @@ export default function CreateRescuePage() {
       handling_type: holding,
       handling_notes: notes.trim() || null,
       packaging_available: packaging,
+      donor_transport_available: delivery,
       prepared_at: toIso(prepared),
       pickup_by: toIso(pickup),
       locality: locality.trim() || null,
@@ -339,13 +344,13 @@ export default function CreateRescuePage() {
         token,
         body: buildBody(),
       }),
-    onMutate: () => setSubmitError(null),
+    meta: { silent: true },
     onSuccess: (data) => {
       localStorage.removeItem(DRAFT_KEY);
       toast({ variant: "success", title: "Rescue posted!", message: "Finding the best match nearby." });
       navigate(`/donor/rescue/${data.id}`);
     },
-    onError: (e) => setSubmitError(errorText(e)),
+    onError: (e) => toastError(errorText(e)),
   });
 
   function nextFromFood() {
@@ -629,6 +634,10 @@ export default function CreateRescuePage() {
               />
               Packaging / containers are available for transfer
             </label>
+            <label className="flex min-h-11 items-center gap-3 text-sm">
+              <input type="checkbox" checked={delivery} onChange={event => setDelivery(event.target.checked)}/>
+              Our team can deliver the donation
+            </label>
 
             <div className="flex flex-col gap-1">
               <label htmlFor="notes" className="text-sm font-medium text-ink">
@@ -752,11 +761,6 @@ export default function CreateRescuePage() {
           </section>
         )}
 
-        {submitError && (
-          <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
-            {submitError}
-          </div>
-        )}
 
         {/* Navigation buttons */}
         <div className="flex flex-wrap justify-between gap-3 pb-2">

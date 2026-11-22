@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, PackageCheck, MapPin } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -10,57 +9,183 @@ import Skeleton from "../../components/ui/Skeleton";
 import ChatBox from "../../components/chat/ChatBox";
 import RecognitionCard from "../../components/rescue/RecognitionCard";
 import PartnerRating from "../../components/rescue/PartnerRating";
+import PickupLogistics, { usePickupLogistics } from "../../components/rescue/PickupLogistics";
+import MealFeedback from "../../components/rescue/MealFeedback";
 import StatusTimeline from "../../components/rescue/StatusTimeline";
 import StatusBadge from "../../components/rescue/StatusBadge";
-import RescueClock from "../../components/rescue/RescueClock";
 import SafetyNotice from "../../components/rescue/SafetyNotice";
 import { useAuth } from "../../features/auth/AuthContext";
+import { useToast } from "../../features/toast/ToastContext";
 import { apiRequest } from "../../lib/api";
 import { foodLabel } from "../../lib/food";
 import { formatDateTime } from "../../lib/format";
 import { pollInterval } from "../../hooks/usePolling";
 import type { RescueDetail } from "../../types/api";
-const CHECKS = ["Confirm holding conditions with the donor; appearance alone cannot establish safety", "Packaging is intact and suitable for transport", "Within the pickup-by time window", "Ingredients and allergens meet our community's needs"];
+
+const CHECKS = ["Holding conditions verified", "Packaging intact and transport ready",
+  "Pickup window still open", "Ingredients and allergens checked"];
+
 export default function ActivePickupPage() {
   const { rescueId = "" } = useParams();
   const { token } = useAuth();
   const client = useQueryClient();
+  const notify = useToast();
   const navigate = useNavigate();
-  const [releaseReason,setReleaseReason] = useState("");
-  const [showRelease,setShowRelease] = useState(false);
-  const release = useMutation({mutationFn:()=>apiRequest(`/rescues/${rescueId}/release`,{method:"POST",token,body:{reason:releaseReason}}),onSuccess:async()=>{await client.invalidateQueries();navigate("/receiver");}});
-  const [code,setCode] = useState("");
-  const [collected,setCollected] = useState("");
-  const [delivered,setDelivered] = useState("");
-  const [rejected,setRejected] = useState("0");
-  const [checks,setChecks] = useState<string[]>([]);
-  const [error,setError] = useState("");
-  const detail = useQuery({ queryKey:["receiver","rescue",rescueId], queryFn:()=>apiRequest<RescueDetail>(`/rescues/${rescueId}`,{token}), refetchInterval:q=>pollInterval(q.state.data?.status) });
+  const [releaseReason, setReleaseReason] = useState("");
+  const [showRelease, setShowRelease] = useState(false);
+  const [code, setCode] = useState("");
+  const [collected, setCollected] = useState("");
+  const [delivered, setDelivered] = useState("");
+  const [rejected, setRejected] = useState("0");
+  const [checks, setChecks] = useState<string[]>([]);
+  const key = ["receiver", "rescue", rescueId];
+  const path = `/rescues/${rescueId}`;
+  const detail = useQuery({
+    queryKey: key,
+    queryFn: () => apiRequest<RescueDetail>(path, { token }),
+    refetchInterval: query => pollInterval(query.state.data?.status),
+  });
   const d = detail.data;
-  const change = useMutation({ mutationFn:({action,body}:{action:string;body:unknown})=>apiRequest(`/rescues/${rescueId}/${action}`,{method:"POST",token,body}), onSuccess:async()=> { setError(""); setCode(""); await Promise.all([client.invalidateQueries({queryKey:["receiver"]}),client.invalidateQueries({queryKey:["rescue",rescueId]}),client.invalidateQueries({queryKey:["rescues"]}),client.invalidateQueries({queryKey:["impact"]}),client.invalidateQueries({queryKey:["contribution"]}),client.invalidateQueries({queryKey:["allocation-batches"]}),client.invalidateQueries({queryKey:["allocation",rescueId]}),client.invalidateQueries({queryKey:["leaderboard"]})]); }, onError:()=>void detail.refetch() });
-  function collect(e:FormEvent) {
-    e.preventDefault(); setError("");
-    if(checks.length!==CHECKS.length) return setError("Confirm each handling check before collecting.");
-    if(!/^\d{4}$/.test(code)) return setError("Enter the donor's four-digit pickup code.");
-    const quantity=Number(collected);
-    if(!collected.trim() || !Number.isInteger(quantity) || quantity<1 || quantity>(d?.total_servings ?? 0)) return setError("Enter a whole number of servings up to the posted quantity.");
-    change.mutate({action:"collect",body:{pickup_code:code,collected_servings:quantity}});
+  const logistics = usePickupLogistics(rescueId, d?.status === "CLAIMED");
+  const ready = logistics.data && Object.values(logistics.data.resources).every(resource => !resource.needs_help);
+  const release = useMutation({
+    mutationFn: () => apiRequest(`${path}/release`, { method: "POST", token, body: { reason: releaseReason } }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["receiver"] });
+      notify.success("Pickup released.");
+      navigate("/receiver");
+    },
+  });
+  const change = useMutation({
+    mutationFn: ({ action, body }: { action: "collect" | "deliver"; body: unknown }) =>
+      apiRequest<{ rescue: RescueDetail }>(`${path}/${action}`, { method: "POST", token, body }),
+    onSuccess: async ({ rescue }, { action }) => {
+      await client.cancelQueries({ queryKey: key });
+      client.setQueryData(key, rescue);
+      setCode("");
+      notify.success(action === "deliver" ? "Delivery confirmed." : "Collection confirmed.");
+      for (const queryKey of [["receiver", "history"], ["receiver", "capacity"], ["receiver", "offers"], ["rescue", rescueId],
+        ["rescues"], ["impact"], ["contribution"], ["allocation-batches"], ["allocation", rescueId], ["leaderboard"]]) {
+        void client.invalidateQueries({ queryKey });
+      }
+    },
+    onError: () => {
+      void detail.refetch();
+      void client.invalidateQueries({ queryKey: ["pickup-logistics", rescueId] });
+    },
+  });
+
+  function collect(event: FormEvent) {
+    event.preventDefault();
+    if (!ready) return notify.error("Confirm containers and transport first.");
+    if (checks.length !== CHECKS.length) return notify.error("Complete each pickup check.");
+    if (!/^\d{4}$/.test(code)) return notify.error("Enter the donor’s four-digit pickup code.");
+    const quantity = Number(collected);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > (d?.total_servings ?? 0)) {
+      return notify.error("Enter a whole number up to the posted servings.");
+    }
+    change.mutate({ action: "collect", body: { pickup_code: code, collected_servings: quantity } });
   }
-  function deliver(e:FormEvent) {
-    e.preventDefault(); setError("");
-    const meals=Number(delivered), waste=Number(rejected || 0);
-    if(!delivered.trim() || !Number.isInteger(meals) || !Number.isInteger(waste) || meals<0 || waste<0 || meals+waste>(d?.collected_servings ?? 0)) return setError(`Delivered plus rejected servings must not exceed ${d?.collected_servings ?? 0} collected servings.`);
-    change.mutate({action:"deliver",body:{delivered_servings:meals,rejected_servings:waste}});
+
+  function deliver(event: FormEvent) {
+    event.preventDefault();
+    const meals = Number(delivered);
+    const waste = Number(rejected || 0);
+    if (!delivered.trim() || !Number.isInteger(meals) || !Number.isInteger(waste) || meals < 0 || waste < 0
+        || meals + waste > (d?.collected_servings ?? 0)) {
+      return notify.error(`Servings delivered and rejected must total at most ${d?.collected_servings ?? 0}.`);
+    }
+    change.mutate({ action: "deliver", body: { delivered_servings: meals, rejected_servings: waste } });
   }
-  return <AppShell title="Active pickup" nav="receiver" backTo="/receiver">
-      {d&&["COLLECTED","DELIVERED"].includes(d.status)&&<Link to={`/receiver/planner?rescue=${rescueId}`} className="mb-4 inline-flex min-h-11 items-center text-sm font-bold text-primary">Open food allocation planner →</Link>}<div className="space-y-4">{detail.isPending ? <Skeleton className="h-96 w-full"/> : detail.isError ? <Card><p role="alert" className="text-danger">{detail.error.message}</p><Button className="mt-3" onClick={()=>void detail.refetch()}>Try again</Button></Card> : d && <><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow text-primary">{d.display_id}</p><h2 className="mt-2 text-2xl font-bold">{d.status === "DELIVERED" ? "A handoff worth celebrating." : "Your next community handoff."}</h2></div><StatusBadge status={d.status}/></div><p className="mt-3 text-sm text-muted">{d.donor_organization_name} · {d.total_servings} servings · {d.locality}</p>{d.status === "CLAIMED" && <div className="mt-3"><RescueClock pickupBy={d.pickup_by}/></div>}</Card>
-    <div className="grid items-start gap-4 lg:grid-cols-[1.3fr_1fr]"><div className="space-y-4">
-      {d.status === "CLAIMED" && <Card><h3 className="flex items-center gap-2 text-lg font-bold"><MapPin size={20}/>Pickup details</h3><p className="mt-3 text-sm">{d.private_address || d.locality}</p><p className="mt-2 text-sm text-muted">Collect by {formatDateTime(d.pickup_by)}. Ask the donor for the code at handoff.</p><form onSubmit={collect} className="mt-4 space-y-3"><fieldset><legend className="mb-2 text-sm font-bold">Check before you collect</legend>{CHECKS.map(label=><label key={label} className="mb-2 flex min-h-12 items-center gap-3 rounded-xl border border-border p-3 text-sm"><input type="checkbox" className="h-5 w-5 shrink-0" checked={checks.includes(label)} onChange={e=>setChecks(e.target.checked?[...checks,label]:checks.filter(c=>c!==label))}/>{label}</label>)}</fieldset><Input label="Pickup code (4 digits)" inputMode="numeric" maxLength={4} autoComplete="off" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/><Input label="Servings collected" type="number" min={1} max={d.total_servings} value={collected} onChange={e=>setCollected(e.target.value)}/><Button className="w-full" type="submit" disabled={checks.length!==CHECKS.length || change.isPending}><PackageCheck size={18}/>{change.isPending ? "Confirming…" : "Confirm collection"}</Button></form></Card>}
-      {d.status === "CLAIMED" && <Card><button onClick={()=>setShowRelease(!showRelease)} className="min-h-11 text-sm font-semibold text-primary underline">Unable to collect? Release this pickup</button>{showRelease&&<form className="mt-3 space-y-3" onSubmit={e=>{e.preventDefault();release.mutate();}}><label className="block text-sm font-semibold">Why can you no longer collect?<textarea value={releaseReason} onChange={e=>setReleaseReason(e.target.value)} required minLength={3} maxLength={300} className="mt-2 w-full rounded-xl border border-border p-3"/></label><p className="text-sm text-muted">Your reservation is released and we try the next compatible partner. This is recorded in your handoff history. You cannot reclaim this listing.</p><Button type="submit" variant="danger" disabled={release.isPending||releaseReason.trim().length<3}>Release pickup</Button>{release.isError&&<p role="alert" className="text-sm text-danger">{release.error.message}</p>}</form>}</Card>}
-      {d.status === "COLLECTED" && <Card><h3 className="text-xl font-bold">Record delivery</h3><p className="mt-2 text-sm text-muted">{d.collected_servings} servings collected. Count only meals that reached your community. The donor's dashboard updates automatically.</p><form onSubmit={deliver} className="mt-4 space-y-4"><Input label="Servings delivered" type="number" min={0} max={d.collected_servings ?? undefined} value={delivered} onChange={e=>setDelivered(e.target.value)}/><Input label="Servings rejected" type="number" min={0} max={d.collected_servings ?? undefined} value={rejected} onChange={e=>setRejected(e.target.value)} hint="Do not distribute unsuitable food. Rejected servings are excluded from impact."/><Button type="submit" className="w-full" disabled={change.isPending}>{change.isPending ? "Recording…" : "Confirm delivery"}</Button></form></Card>}
-      {(error || change.isError) && <p role="alert" className="rounded-xl bg-dangerLight p-3 text-sm text-danger">{error || change.error?.message}</p>}
-      {d.status === "DELIVERED" && <><Card variant="fresh"><CheckCircle2 className="mb-3 text-primary" size={28}/><h3 className="text-2xl font-bold">{d.impact?.delivered_servings ?? 0} meals delivered</h3><p className="mt-2 text-sm text-muted">Confirmed for both you and the donor. {d.impact?.rejected_servings ?? 0} rejected servings are excluded from impact.</p><Link to="/receiver/impact" className="mt-4 inline-flex min-h-12 items-center font-semibold text-primary">See your impact</Link></Card><RecognitionCard rescueId={rescueId} delivered={d.impact?.delivered_servings ?? 0}/><PartnerRating rescueId={rescueId}/></>}
-      {["EXPIRED","CANCELLED"].includes(d.status) && <Card variant="warn"><h3 className="font-bold">{d.status === "EXPIRED" ? "The pickup window has ended" : "This rescue was cancelled"}</h3><p className="mt-2 text-sm">Do not collect this listing. Your reserved capacity is released.</p><Link to="/receiver" className="mt-3 inline-block font-semibold text-primary">Find another rescue</Link></Card>}
-      {["CLAIMED","COLLECTED","DELIVERED"].includes(d.status) && <ChatBox rescueId={rescueId} recipientName={d.donor_organization_name} defaultOpen/>}
-    </div><div className="space-y-4"><Card><h3 className="mb-3 text-lg font-bold">Food & handling</h3>{d.food_items.map((f,i)=><div key={i} className="border-t border-border py-3"><p className="font-semibold">{f.name} · {f.quantity_servings} servings</p><p className="mt-1 text-sm text-muted">{foodLabel(f.dietary_type)} · {foodLabel(f.food_category ?? "COOKED_MEAL")}</p><p className="mt-1 text-sm text-warn">{f.allergen_info_unknown ? "Allergen information unknown — verify independently" : `Listed allergens: ${f.allergens.join(", ") || "none provided"}`}</p></div>)}<p className="mt-2 text-sm font-semibold">{foodLabel(d.handling_type)} · {d.packaging_available ? "Packaging available" : "Bring suitable containers"}</p><p className="mt-2 text-sm text-muted">Prepared {formatDateTime(d.prepared_at)}</p>{d.handling_notes && <p className="mt-2 text-sm text-muted">{d.handling_notes}</p>}<div className="mt-3"><SafetyNotice/></div></Card><Card><h3 className="mb-4 font-bold">Rescue timeline</h3><StatusTimeline status={d.status} events={d.status_events ?? []}/></Card></div></div></>}</div></AppShell>;
+
+  return (
+    <AppShell title="Pickup" nav="receiver" backTo="/receiver">
+      {detail.isPending && <Skeleton className="h-72 w-full"/>}
+      {detail.isError && <Button variant="secondary" onClick={() => void detail.refetch()}>Retry pickup details</Button>}
+      {d && <div className="space-y-4">
+        <Card>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">{d.donor_organization_name || d.display_id}</h2>
+              <p className="text-sm text-muted">{d.display_id} · {d.total_servings} servings · {d.locality}</p>
+            </div>
+            <StatusBadge status={d.status}/>
+          </div>
+          <StatusTimeline status={d.status} events={d.status_events ?? []}/>
+        </Card>
+
+        {d.status === "CLAIMED" && <PickupLogistics rescueId={rescueId} side="receiver"/>}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            {d.status === "CLAIMED" && <Card>
+              <h3 className="text-lg font-bold">Confirm collection</h3>
+              <p className="mt-1 text-sm">{d.private_address || d.locality} · by {formatDateTime(d.pickup_by)}</p>
+              <form onSubmit={collect} noValidate className="mt-4 space-y-3">
+                <fieldset className="grid gap-2 sm:grid-cols-2">
+                  <legend className="mb-2 text-sm font-semibold">Pickup checks</legend>
+                  {CHECKS.map(label => <label key={label} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm">
+                    <input type="checkbox" checked={checks.includes(label)} onChange={event => setChecks(event.target.checked
+                      ? [...checks, label] : checks.filter(check => check !== label))}/>{label}
+                  </label>)}
+                </fieldset>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input label="Pickup code" hint="Ask the donor for the four-digit code." inputMode="numeric"
+                    maxLength={4} autoComplete="off" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ""))}/>
+                  <Input label="Servings collected" type="number" min={1} max={d.total_servings}
+                    value={collected} onChange={event => setCollected(event.target.value)}/>
+                </div>
+                {!ready && <p className="text-sm text-warn">{logistics.isPending ? "Checking pickup logistics…" : "Confirm containers and transport above."}</p>}
+                <Button type="submit" disabled={!ready || change.isPending}>Confirm collection</Button>
+              </form>
+              <button type="button" className="mt-3 text-sm font-semibold text-primary underline" onClick={() => setShowRelease(!showRelease)}>Release pickup</button>
+              {showRelease && <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); release.mutate(); }}>
+                <label className="block text-sm font-semibold">Reason<textarea value={releaseReason} onChange={event => setReleaseReason(event.target.value)}
+                  minLength={3} maxLength={300} required className="mt-1 w-full rounded-lg border border-border p-2"/></label>
+                <Button type="submit" variant="danger" disabled={release.isPending || releaseReason.trim().length < 3}>Confirm release</Button>
+              </form>}
+            </Card>}
+
+            {d.status === "COLLECTED" && <Card>
+              <h3 className="text-lg font-bold">Record delivery</h3>
+              <p className="mt-1 text-sm text-muted">{d.collected_servings} servings collected</p>
+              <form onSubmit={deliver} noValidate className="mt-4 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input label="Servings delivered" type="number" min={0} value={delivered} onChange={event => setDelivered(event.target.value)}/>
+                  <Input label="Servings rejected" type="number" min={0} value={rejected} onChange={event => setRejected(event.target.value)}/>
+                </div>
+                <Button type="submit" disabled={change.isPending}>{change.isPending ? "Recording…" : "Confirm delivery"}</Button>
+              </form>
+            </Card>}
+
+            {d.status === "DELIVERED" && <Card variant="fresh">
+              <h3 className="text-xl font-bold">{d.impact?.delivered_servings ?? 0} meals delivered</h3>
+              {!!d.impact?.rejected_servings && <p className="text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}
+              <Link to="/receiver/impact" className="mt-2 inline-block text-sm font-semibold text-primary underline">View impact</Link>
+            </Card>}
+            {["COLLECTED", "DELIVERED"].includes(d.status) && <Link to={`/receiver/planner?rescue=${rescueId}`}
+              className="inline-block text-sm font-semibold text-primary underline">Open allocation planner</Link>}
+            {["CLAIMED", "COLLECTED", "DELIVERED"].includes(d.status) && <ChatBox rescueId={rescueId} recipientName={d.donor_organization_name}/>}
+          </div>
+          <Card>
+            <h3 className="mb-2 font-bold">Food and handling</h3>
+            {d.food_items.map((item, index) => <div key={index} className="border-t border-border py-2 text-sm">
+              <p className="font-semibold">{item.name} · {item.quantity_servings} servings</p>
+              <p className="text-muted">{foodLabel(item.dietary_type)} · {foodLabel(item.food_category ?? "COOKED_MEAL")}</p>
+              <p>{item.allergen_info_unknown ? "Allergens unknown. Verify before serving." : `Listed allergens: ${item.allergens.join(", ") || "none provided"}`}</p>
+            </div>)}
+            <p className="text-sm">{foodLabel(d.handling_type)} · Prepared {formatDateTime(d.prepared_at)}</p>
+            {d.handling_notes && <p className="mt-1 text-sm">{d.handling_notes}</p>}
+            <div className="mt-3"><SafetyNotice/></div>
+          </Card>
+        </div>
+        {d.status === "DELIVERED" && <div className="grid items-start gap-4 lg:grid-cols-2">
+          <RecognitionCard rescueId={rescueId} delivered={d.impact?.delivered_servings ?? 0}/>
+          <div className="space-y-4">
+            {!!d.impact?.delivered_servings && <MealFeedback key={rescueId} rescueId={rescueId}/>}
+            <PartnerRating rescueId={rescueId}/>
+          </div>
+        </div>}
+      </div>}
+    </AppShell>
+  );
 }

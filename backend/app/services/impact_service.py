@@ -97,7 +97,7 @@ def impact_summary(
         total_meals += row.servings
         if ensure_utc(row.recorded_at) >= month_start:
             meals_this_month += row.servings
-        elapsed = ensure_utc(row.delivered_at) - ensure_utc(row.posted_at)
+        elapsed = ensure_utc(row.delivered_at or row.recorded_at) - ensure_utc(row.posted_at)
         minutes.append(elapsed.total_seconds() / 60)
 
     completed = len(rows)
@@ -140,7 +140,7 @@ def impact_summary(
                 "rescue_id": str(row.rescue_id),
                 "recognition_token": str(row.recognition_token) if row.recognition_token else None,
                 "delivered_servings": row.servings,
-                "delivered_at": ensure_utc(row.delivered_at).isoformat(),
+                "delivered_at": ensure_utc(row.delivered_at or row.recorded_at).isoformat(),
                 "receiver_name": row.receiver_name,
             }
             for row in rows[:RECENT_LIMIT]

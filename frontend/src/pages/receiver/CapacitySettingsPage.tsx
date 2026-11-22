@@ -35,6 +35,9 @@ interface FormState {
   accepts_veg: boolean;
   accepts_non_veg: boolean;
   transport_available: boolean;
+  containers_available: boolean;
+  refrigeration_available: boolean;
+  volunteer_servings: string;
   need_level: NeedLevel;
 }
 
@@ -65,6 +68,9 @@ export default function CapacitySettingsPage() {
         accepts_veg: c.accepts_veg,
         accepts_non_veg: c.accepts_non_veg,
         transport_available: c.transport_available,
+        containers_available: c.containers_available ?? true,
+        refrigeration_available: c.refrigeration_available ?? false,
+        volunteer_servings: c.volunteer_servings == null ? "" : String(c.volunteer_servings),
         need_level: c.need_level as NeedLevel,
       });
     }
@@ -123,6 +129,9 @@ export default function CapacitySettingsPage() {
       accepts_veg: form.accepts_veg,
       accepts_non_veg: form.accepts_non_veg,
       transport_available: form.transport_available,
+      containers_available: form.containers_available,
+      refrigeration_available: form.refrigeration_available,
+      volunteer_servings: form.volunteer_servings === "" ? null : Number(form.volunteer_servings),
       need_level: form.need_level,
     } as CapacityData);
   }
@@ -217,6 +226,16 @@ export default function CapacitySettingsPage() {
                 />
                 <span>I have transport available</span>
               </label>
+              <label className="flex min-h-11 items-center gap-3">
+                <input type="checkbox" checked={form.containers_available} onChange={event => update("containers_available", event.target.checked)}/>
+                Our team can provide containers
+              </label>
+              <label className="flex min-h-11 items-center gap-3">
+                <input type="checkbox" checked={form.refrigeration_available} onChange={event => update("refrigeration_available", event.target.checked)}/>
+                Refrigerated storage is available
+              </label>
+              <Input label="Volunteer capacity (servings)" type="number" min={0} max={100000} value={form.volunteer_servings}
+                onChange={event => update("volunteer_servings", event.target.value)} hint="Leave blank to use your available servings."/>
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="need_level" className="text-sm font-medium">

@@ -72,7 +72,7 @@ def test_database() -> Iterator[None]:
     """Start from a fresh SQLite file and seed the demo data once per session."""
     if _IS_SQLITE_TEST_DB and TEST_DB_PATH.exists():
         TEST_DB_PATH.unlink()
-    init_database()
+    init_database(include_history=False)
     yield
 
 

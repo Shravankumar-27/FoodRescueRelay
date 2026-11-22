@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from "lucide-react";
+import { randomId } from "../../lib/randomId";
 
 type ToastVariant = "success" | "error" | "info" | "warn";
 
@@ -85,7 +86,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback(
     (options: ToastOptions | string, variant: ToastVariant = "info", duration?: number) => {
-      const id = crypto.randomUUID();
+      const id = randomId();
       let t: Toast;
       if (typeof options === "string") {
         t = { id, message: options, variant, duration: duration ?? 4000 };

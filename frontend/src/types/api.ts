@@ -106,6 +106,7 @@ export interface RescueDetail {
   status_events?: StatusEvent[];
   pickup_code?: string | null;
   claimed_receiver?: { name: string | null; locality: string | null } | null;
+  pending_receiver?: string | null;
   impact?: {
     delivered_servings: number;
     rejected_servings: number | null;
@@ -125,6 +126,7 @@ export interface RescueSummary {
   created_at: string;
   locality: string | null;
   delivered_servings: number | null;
+  receiver_release?: { id: string; reason: string; created_at: string } | null;
 }
 
 // Item returned by GET /offers/history (receiver's ACCEPTED offers).
@@ -138,6 +140,8 @@ export interface ReceiverHistoryItem {
 }
 
 export interface MatchCandidate {
+  receiver_id?: string;
+  replacement_available?: boolean;
   receiver_name: string;
   locality: string;
   feasible: boolean;
@@ -190,6 +194,9 @@ export interface CapacityData {
   accepts_veg: boolean;
   accepts_non_veg: boolean;
   transport_available: boolean;
+  containers_available?: boolean;
+  refrigeration_available?: boolean;
+  volunteer_servings?: number | null;
   need_level: "LOW" | "MEDIUM" | "HIGH";
   updated_at: string;
 }
@@ -248,6 +255,7 @@ export interface AdminRescue {
 }
 
 export interface NearbyReceiver {
+  refrigeration_available?: boolean;
   accepted_dietary_types: string[];
   accepted_food_categories: string[];
   description: string;
@@ -274,6 +282,12 @@ export interface NearbyReceiver {
 }
 
 export interface ChatMessage {
+  allocation_proposal?: {
+    items: { id: string; name: string; diet: string; servings: number }[];
+    pickup_by: string;
+    locality: string;
+    status: "open" | "closed" | "superseded";
+  };
   id: string;
   sender_name: string;
   sender_role: string;

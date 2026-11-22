@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "../features/auth/AuthContext";
 import { ToastProvider } from "../features/toast/ToastContext";
+import ApiErrorToasts from "../features/toast/ApiErrorToasts";
 import Skeleton from "../components/ui/Skeleton";
 import RequireRole from "./RequireRole";
 const LandingPage = lazy(() => import("../pages/LandingPage"));
@@ -62,6 +63,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ToastProvider>
+          <ApiErrorToasts/>
           <BrowserRouter>
             <Suspense fallback={<div className="p-6"><Skeleton className="h-64 w-full" /></div>}>
             <Routes>

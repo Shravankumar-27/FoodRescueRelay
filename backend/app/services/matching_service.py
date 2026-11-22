@@ -66,6 +66,8 @@ class CandidateInput:
     accepted_dietary_types: frozenset[str] = frozenset()
     accepted_food_categories: frozenset[str] = frozenset()
     excluded_allergens: frozenset[str] = frozenset()
+    refrigeration_available: bool = False
+    volunteer_servings: int | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,8 @@ class RescueInput:
     food_categories: frozenset[str] = frozenset()
     allergens: frozenset[str] = frozenset()
     allergens_unknown: bool = False
+    logistics_supported: bool = False
+    requires_refrigeration: bool = False
 
 
 @dataclass
@@ -118,9 +122,11 @@ def _rejection_reasons(rescue: RescueInput, cand: CandidateInput, slack_minutes:
         )
     if rescue.has_non_veg and not cand.accepts_non_veg:
         reasons.append("Does not accept non-vegetarian food")
-    if not rescue.has_non_veg and not cand.accepts_veg:
+    if not cand.accepts_veg and (not rescue.has_non_veg or rescue.dietary_types & {"VEG", "VEGAN", "JAIN", "RAW_VEGAN"}):
         reasons.append("Does not accept vegetarian food")
-    if not cand.transport_available:
+    if rescue.requires_refrigeration and not cand.refrigeration_available:
+        reasons.append("Refrigerated storage is required")
+    if not cand.transport_available and not rescue.logistics_supported:
         reasons.append("No transport available")
     if cand.accepted_dietary_types and not rescue.dietary_types.issubset(cand.accepted_dietary_types):
         reasons.append("Food does not match accepted dietary types")
@@ -251,6 +257,8 @@ def load_candidates(db: Session, rescue: Rescue, now: datetime) -> list[Candidat
                 accepted_dietary_types=frozenset(capacity.accepted_dietary_types or []),
                 accepted_food_categories=frozenset(capacity.accepted_food_categories or []),
                 excluded_allergens=frozenset(a.lower() for a in (capacity.excluded_allergens or [])),
+                refrigeration_available=capacity.refrigeration_available,
+                volunteer_servings=capacity.volunteer_servings,
             )
         )
     return candidates
@@ -269,25 +277,29 @@ def match_rescue(
     if rescue is None:
         raise AppError("RESCUE_NOT_FOUND", "Rescue was not found.", 404)
 
-    dietary_types = frozenset(item.dietary_type for item in rescue.food_items)
-    rescue_input = RescueInput(
+    return evaluate_candidates(
+        build_rescue_input(rescue, rescue.food_items),
+        load_candidates(db, rescue, current),
+        current,
+        get_settings().MATCHING_SAFETY_BUFFER_MINUTES,
+    )
+
+
+def build_rescue_input(rescue: Rescue, items) -> RescueInput:
+    dietary_types = frozenset(item.dietary_type for item in items)
+    return RescueInput(
         rescue_id=rescue.id,
         latitude=rescue.latitude,
         longitude=rescue.longitude,
-        total_servings=rescue.total_servings,
+        total_servings=sum(item.quantity_servings for item in items),
         has_non_veg=bool(dietary_types & {"NON_VEG", "HALAL", "OTHER", "UNKNOWN", "GLUTEN_FREE", "DIABETIC_FRIENDLY"}),
         dietary_types=dietary_types,
         pickup_by=ensure_utc(rescue.pickup_by),
         prepared_at=ensure_utc(rescue.prepared_at),
         rescue_status=rescue.status,
-        food_categories=frozenset(item.food_category for item in rescue.food_items),
-        allergens=frozenset(a.lower() for item in rescue.food_items for a in (item.allergens or [])),
-        allergens_unknown=any(item.allergen_info_unknown for item in rescue.food_items),
-    )
-    candidates = load_candidates(db, rescue, current)
-    return evaluate_candidates(
-        rescue_input,
-        candidates,
-        current,
-        get_settings().MATCHING_SAFETY_BUFFER_MINUTES,
+        food_categories=frozenset(item.food_category for item in items),
+        allergens=frozenset(a.lower() for item in items for a in (item.allergens or [])),
+        allergens_unknown=any(item.allergen_info_unknown for item in items),
+        logistics_supported=True,
+        requires_refrigeration=rescue.handling_type == "REFRIGERATED",
     )

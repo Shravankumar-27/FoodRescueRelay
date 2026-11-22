@@ -59,6 +59,7 @@ class Rescue(Base):
     handling_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     untouched_confirmed: Mapped[bool] = mapped_column(Boolean)
     packaging_available: Mapped[bool] = mapped_column(Boolean)
+    donor_transport_available: Mapped[bool] = mapped_column(Boolean, default=False)
     safety_attestation: Mapped[bool] = mapped_column(Boolean)
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)

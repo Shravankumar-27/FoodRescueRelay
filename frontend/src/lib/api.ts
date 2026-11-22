@@ -52,7 +52,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
-    throw new ApiError("OFFLINE", "You're offline. Your latest data may be outdated.", 0);
+    throw new ApiError("OFFLINE", "Could not reach the RescueRelay API. Check the connection and try again.", 0);
   }
 
   let body: unknown = null;
@@ -63,10 +63,10 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   }
 
   const envelope = body as ErrorEnvelope | null;
-  if (!res.ok || envelope?.success === false) {
+  if (!res.ok || envelope?.success !== true) {
     throw new ApiError(
       envelope?.error?.code ?? "HTTP_ERROR",
-      envelope?.error?.message ?? "Something went wrong. Please try again.",
+      envelope?.error?.message ?? "The RescueRelay API returned an unexpected response. Try again.",
       res.status,
       envelope?.error?.details,
     );

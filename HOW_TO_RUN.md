@@ -1,5 +1,14 @@
 # How to run RescueRelay
 
+## Allocation, reassignment, and pickup coordination
+
+Upgrade an existing database with `alembic upgrade head` from `backend`, then run `python -m app.seed.init_db` for a local demo database. Restart the API and frontend afterwards. Migration `0008` adds saved partners and the provider directory.
+
+- **Donors** can open **Explore split plan** on a posted rescue, adjust the split, select receivers, and click **Notify selected**. Each selected receiver sees their proposed portion and pickup deadline in **Messages** and can reply there. The donor can see when a proposal was read. The pickup workflow handles formal claims for the whole rescue.
+- **Released pickups** appear under **Pickup changes** on the donor dashboard. Dispatch contacts the next eligible receiver automatically, and the donor can send the donation to another eligible receiver from the rescue page while it remains open.
+- **Pickup logistics** lists available providers for a missing resource after a receiver accepts. A pickup partner can confirm an arrangement there. Coordinators manage the directory and outstanding requests under **Admin → Rescues**.
+- **Meal feedback** opens for the receiver after delivery. Receivers can opt in, edit, or withdraw a response. The donor dashboard shows combined menu insights after three responses.
+
 ## Recognition, coins and planner update (November 2026)
 
 The donor appreciation studio and receiver acknowledgement flow use migrations `0004` (recognition) and `0005` (private allocation plans). For an existing synthetic demo, run `python -m app.seed.init_db` from `backend`; this adds the missing schema without deleting your donations. For Alembic-managed databases, run `alembic upgrade head`. Back up non-disposable databases first, then restart the API.
@@ -117,7 +126,9 @@ alembic upgrade head
 python -m app.seed.init_db
 ```
 
-`alembic upgrade head` applies the migrations in `backend/alembic/versions/`. `init_db` creates any missing tables and inserts the demo organizations, users and one demo rescue. It is safe to run again.
+`alembic upgrade head` applies the migrations. With `DEMO_MODE=true`, `init_db` populates fictional postings, deliveries, coins, feedback, appreciation, allocation plans and provider options. It also fills missing history records in older seeded demos. Running it again preserves existing postings and feedback.
+
+Postings, deliveries, feedback, appreciation, favorites and plans are stored in the selected database. A fresh clone recreates the fictional demo from the seed. To share your team's live information, point the backend instances to the same authorized PostgreSQL database using `DATABASE_URL`. Store credentials locally or in the deployment's secret store.
 
 ### Start the API
 
@@ -167,6 +178,8 @@ Password for every account: `demo123`
 | admin@rescuerelay.demo | admin | RescueRelay Admin |
 
 For the step-by-step demo, see [docs/DEMO.md](docs/DEMO.md).
+
+For the pickup support demo, sign in as `asha@rescuerelay.demo` and open the active Kondapur pickup. Demo providers are listed for both missing resources. Confirm both arrangements to unlock collection. The pickup code is on the donor view under `kondapur@rescuerelay.demo`.
 
 ## 7. Reset demo data
 
@@ -309,7 +322,7 @@ This starts PostgreSQL, builds the backend image (`backend/Dockerfile`, which ru
 - `CORS_ORIGINS` in `backend/.env` must include `http://localhost:5173`. Restart the API after changing it.
 
 **Frontend cannot reach the API.** Pages show network errors.
-- Check that `frontend/.env` has `VITE_API_BASE_URL=http://localhost:8000/api/v1`. Vite reads it at start-up, so restart `npm run dev` after changing it.
+- Check that `frontend/.env` has `VITE_API_BASE_URL=/api/v1` for the local Vite proxy. Vite reads it at start-up, so restart `npm run dev` after changing it.
 - Check that the API is running and that http://localhost:8000/api/v1/health responds.
 
 **JWT or login problem.** You are signed out, or see `INVALID_TOKEN`.
@@ -338,6 +351,5 @@ This guide is for local demos. Before any real deployment:
 - **Change `JWT_SECRET`** to a long random value. Do not reuse the example value.
 - **Set `DATABASE_URL`** to your production database (PostgreSQL). Do not use the demo SQLite file.
 - **Set `CORS_ORIGINS`** to your real frontend origin only.
-- **Set `DEMO_MODE=false`.** Note that the current code defines this setting but does not read it, so setting it does not change behaviour by itself.
-- **Remove the demo accounts.** No script does this. Delete the five `@rescuerelay.demo` users and their organizations from the production database, or never seed them there.
+- **Set `DEMO_MODE=false`** before initializing the production database.
 - **Serve the frontend build over HTTPS.** Build with `npm run build` and serve `frontend/dist` from a web server or CDN, with the API behind HTTPS too.

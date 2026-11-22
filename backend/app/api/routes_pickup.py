@@ -16,6 +16,7 @@ from app.models.rescue import Rescue
 from app.models.user import User
 from app.schemas.pickup import CollectRequest, DeliverRequest
 from app.services.pickup_service import collect_rescue, deliver_rescue
+from app.services.rescue_service import rescue_detail
 
 router = APIRouter(prefix="/rescues", tags=["pickup"])
 
@@ -51,8 +52,9 @@ def collect(
     return ok(
         {
             "rescue_id": str(rescue.id),
-            "status": RescueStatus.COLLECTED.value,
+            "status": rescue.status,
             "collected_servings": handoff.collected_servings,
+            "rescue": rescue_detail(db, rescue, user),
         },
         _request_id(request),
     )
@@ -75,6 +77,7 @@ def deliver(
         rejected_servings=body.rejected_servings,
         now=utcnow(),
     )
+    db.expire(rescue, ["impact", "handoff", "status_events"])
     return ok(
         {
             "rescue_id": str(rescue.id),
@@ -82,6 +85,7 @@ def deliver(
             "delivered_servings": impact.delivered_servings,
             "rejected_servings": rescue.handoff.rejected_servings if rescue.handoff else 0,
             "impact_meals": impact.delivered_servings,
+            "rescue": rescue_detail(db, rescue, user),
         },
         _request_id(request),
     )

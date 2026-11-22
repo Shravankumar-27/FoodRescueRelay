@@ -43,30 +43,31 @@ export default function StatusTimeline({
     STEPS.forEach((step, index) => { if (events.some(e => step.reachedBy.includes(e.to_status))) currentIndex = Math.max(currentIndex, index); });
   }
   return (
-    <ol className="flex flex-col gap-3">
+    <ol className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       {STEPS.map((step, index) => {
         const state: StepState =
-          (index < currentIndex || (stopped && index === currentIndex)) ? "done" : index === currentIndex ? "current" : "pending";
+          index < currentIndex || ((stopped || status === "DELIVERED") && index === currentIndex)
+            ? "done" : index === currentIndex ? "current" : "pending";
         const Icon = state === "done" ? Check : state === "current" ? CircleDot : Circle;
-        const event = events.find((e) => e.to_status === step.key);
+        const event = state === "pending" ? undefined : [...events].reverse().find((e) => e.to_status === step.key);
         const iconClass =
           state === "pending" ? "text-slate-400" : state === "done" ? "text-success" : "text-primary";
         const labelClass = state === "pending" ? "text-muted" : "font-medium text-ink";
 
         return (
-          <li key={step.key} className="flex items-start gap-3">
+          <li key={step.key} className="flex min-w-0 items-start gap-2">
             <Icon aria-hidden="true" className={`mt-0.5 h-5 w-5 shrink-0 ${iconClass}`} />
             <div>
               <p className={labelClass}>
                 {step.key === "MATCHING" && (status === "MATCHING" || (stopped && !events.some(e => ["OFFERED", "CLAIMED", "COLLECTED", "DELIVERED"].includes(e.to_status)))) ? "Matching" : step.label}
                 <span className="sr-only"> ({state})</span>
               </p>
-              {event && <p className="text-sm text-muted">{formatDateTime(event.created_at)}</p>}
+              {event && <p className="text-xs text-muted">{formatDateTime(event.created_at)}</p>}
             </div>
           </li>
         );
       })}
-      {stopped && <li className="rounded-xl bg-accentLight p-3 text-sm font-semibold text-warn">{status === "EXPIRED" ? "Pickup window expired — do not collect" : "Rescue cancelled"}</li>}
+      {stopped && <li className="col-span-full rounded-xl bg-accentLight p-3 text-sm font-semibold text-warn">{status === "EXPIRED" ? "Pickup window expired — do not collect" : "Rescue cancelled"}</li>}
     </ol>
   );
 }

@@ -14,6 +14,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Skeleton from "../../components/ui/Skeleton";
 import RescueClock from "../../components/rescue/RescueClock";
 import SafetyNotice from "../../components/rescue/SafetyNotice";
+import FavoritePartner, { useFavoritePartners } from "../../components/partners/FavoritePartner";
 import { useAuth } from "../../features/auth/AuthContext";
 import { ApiError, apiRequest } from "../../lib/api";
 import { formatMinutes } from "../../lib/format";
@@ -74,15 +75,11 @@ function MatchScoreBar({ label, score }: { label: string; score: number }) {
 
 function OfferCard({
   offer,
-  claimError,
-  closedMessage,
   onClaim,
   onDecline,
   busy,
 }: {
   offer: OfferAvailable;
-  claimError?: string;
-  closedMessage?: string;
   onClaim: () => void;
   onDecline: () => void;
   busy: boolean;
@@ -97,16 +94,6 @@ function OfferCard({
 
   const remaining = Math.max(0, Math.ceil((new Date(offer.expires_at).getTime() - now) / 1000));
   const urgency = urgencyColor(offer.pickup_by);
-
-  if (closedMessage) {
-    return (
-      <Card>
-        <p role="alert" className="text-sm text-muted">
-          {closedMessage}
-        </p>
-      </Card>
-    );
-  }
 
   return (
     <Card className="relative overflow-hidden">
@@ -123,9 +110,7 @@ function OfferCard({
             </div>
             <p className="text-xs text-muted mt-0.5">{offer.locality} · {offer.rank_badge} partner · address after acceptance</p>
           </div>
-          <span className={`text-xs font-semibold shrink-0 ${urgency.text}`}>
-            {urgency.label}
-          </span>
+          <FavoritePartner id={offer.donor_id} name={offer.donor_name}/>
         </div>
 
         {/* Key stats row */}
@@ -211,12 +196,6 @@ function OfferCard({
           </span>
         </div>
 
-        {claimError && (
-          <p role="alert" className="text-sm text-urgent">
-            {claimError}
-          </p>
-        )}
-
         <SafetyNotice />
 
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -238,11 +217,13 @@ export default function ReceiverHomePage() {
   const queryClient = useQueryClient();
   const [diet, setDiet] = useState("");
   const [category, setCategory] = useState("");
+  const [area, setArea] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const favorites = useFavoritePartners();
   const history = useQuery({ queryKey: ["receiver", "history"], queryFn: () => apiRequest<ReceiverHistoryItem[]>("/offers/history", { token }), refetchInterval: 5000 });
   const impact = useQuery({ queryKey: ["impact", "summary"], queryFn: () => apiRequest<ImpactSummary>("/impact/summary", { token }), refetchInterval: 15000 });
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
-  const [claimErrors, setClaimErrors] = useState<Record<string, string>>({});
   const [closed, setClosed] = useState<Record<string, string>>({});
   const [activeOfferId, setActiveOfferId] = useState<string | null>(null);
 
@@ -290,11 +271,6 @@ export default function ReceiverHomePage() {
       ),
     onMutate: (offerId: string) => {
       setActiveOfferId(offerId);
-      setClaimErrors((prev) => {
-        const next = { ...prev };
-        delete next[offerId];
-        return next;
-      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["receiver"] });
@@ -307,8 +283,6 @@ export default function ReceiverHomePage() {
         (err instanceof Error ? err.message : "Could not accept this rescue.");
       if (apiErr && REMOVING_CODES.includes(apiErr.code)) {
         setClosed((prev) => ({ ...prev, [offerId]: message }));
-      } else {
-        setClaimErrors((prev) => ({ ...prev, [offerId]: message }));
       }
       queryClient.invalidateQueries({ queryKey: ["receiver", "offers"] });
     },
@@ -325,29 +299,31 @@ export default function ReceiverHomePage() {
       setClosed((prev) => ({ ...prev, [offerId]: "You declined this rescue." }));
       queryClient.invalidateQueries({ queryKey: ["receiver", "offers"] });
     },
-    onError: (err: unknown, offerId: string) => {
-      setClaimErrors((prev) => ({
-        ...prev,
-        [offerId]: err instanceof Error ? err.message : "Could not decline this offer.",
-      }));
-    },
   });
 
   const offlineError =
     offersQuery.error instanceof ApiError && offersQuery.error.code === "OFFLINE";
 
   const capacity = capacityQuery.data;
-  const offers = (offersQuery.data ?? []).filter(o => (!diet || o.food_items.every(f => f.dietary_type === diet)) && (!category || o.food_items.every(f => f.food_category === category)));
+  const known = offersQuery.data ?? [];
+  const areas = [...new Set(known.map(offer => offer.locality).filter(Boolean))].sort();
+  const offers = known.filter(offer => !closed[offer.id] && (!area || offer.locality === area)
+    && (!favoritesOnly || favorites.data?.some(partner => partner.id === offer.donor_id))
+    && offer.food_items.some(item => (!diet || item.dietary_type === diet) && (!category || item.food_category === category)));
   const activePickups = (history.data ?? []).filter(r => ["CLAIMED", "COLLECTED"].includes(r.status));
 
   return (
     <AppShell title="Available rescues" nav="receiver">
       <div className="flex flex-col gap-4">
-        <ContributionBanner/><Link to="/receiver/planner" className="inline-flex min-h-11 items-center text-sm font-bold text-primary">Plan portions for your community →</Link>
-        <section className="harvest-hero"><p className="eyebrow text-white/70">Community receiver · Hyderabad pilot</p><h2 className="mt-2 text-3xl font-extrabold">Good food is closer<br/>than you think.</h2><p className="mt-3 text-sm text-white/80">Find food that fits your community. Confirm the details, collect on time, and record the meals delivered.</p></section>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/receiver/planner" className="view-toggle">Allocation planner</Link>
+          <Link to="/messages" className="view-toggle">Saved donors</Link>
+          <Link to="/recognition" className="view-toggle">Appreciation</Link>
+        </div>
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Compatible listings" value={offersQuery.isPending ? "—" : offers.length} note="Based on your capacity & diet"/><Metric label="Active pickups" value={activePickups.length} note="Waiting for your next step"/><Metric label="Meals this month" value={impact.data?.meals_rescued_month ?? "—"} note="Confirmed deliveries"/><Metric label="Meals received" value={impact.data?.total_meals_rescued ?? "—"} note="All-time contribution"/></section>
-        {activePickups.length > 0 && <Card><h3 className="mb-2 font-bold">Continue your pickups</h3>{activePickups.map(r => <Link key={r.rescue_id} to={`/receiver/pickup/${r.rescue_id}`} className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-sm"><strong>{r.rescue_display_id}</strong><span className="font-semibold text-primary">{r.status === "CLAIMED" ? "Confirm collection" : "Record delivery"}</span></Link>)}</Card>}
-        {offersQuery.isError && !offlineError && <p role="alert" className="rounded-xl bg-dangerLight p-3 text-sm text-danger">{offersQuery.error.message} <button className="underline" onClick={() => void offersQuery.refetch()}>Retry</button></p>}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+        {activePickups.length > 0 && <Card><h3 className="mb-2 font-bold">Active pickups</h3>{activePickups.map(r => <Link key={r.rescue_id} to={`/receiver/pickup/${r.rescue_id}`} className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><strong>{r.rescue_display_id}</strong><span className="font-semibold text-primary">{r.status === "CLAIMED" ? "Confirm collection" : "Record delivery"}</span></Link>)}</Card>}
+        {offersQuery.isError && !offlineError && <button className="view-toggle" onClick={() => void offersQuery.refetch()}>Retry offers</button>}
 
         {offlineError && (
           <div role="alert" className="rounded-xl border border-warn/30 bg-warn/5 p-3 text-sm text-warn">
@@ -390,13 +366,6 @@ export default function ReceiverHomePage() {
                   />
                 </button>
               </div>
-              {toggleMutation.isError && (
-                <p role="alert" className="text-sm text-urgent">
-                  {toggleMutation.error instanceof Error
-                    ? toggleMutation.error.message
-                    : "Could not update availability."}
-                </p>
-              )}
             </div>
           ) : (
             <p role="alert" className="text-sm text-urgent">
@@ -404,7 +373,15 @@ export default function ReceiverHomePage() {
             </p>
           )}
         </Card>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Donor locality" value={area} onChange={event => setArea(event.target.value)}>
+            <option value="">All localities</option>{[...new Set([...areas, ...(area ? [area] : [])])].map(location => <option key={location}>{location}</option>)}
+          </select>
+          <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={favoritesOnly}
+            onChange={event => setFavoritesOnly(event.target.checked)}/>Favorite donors</label>
+        </div>
         <div className="flex flex-wrap items-center gap-2"><select aria-label="Filter available food by diet" value={diet} onChange={e => setDiet(e.target.value)}><option value="">All compatible diets</option>{DIETS.map(d => <option key={d} value={d}>{foodLabel(d)}</option>)}</select><select aria-label="Filter available food by category" value={category} onChange={e => setCategory(e.target.value)}><option value="">All food categories</option>{CATEGORIES.map(c => <option key={c} value={c}>{foodLabel(c)}</option>)}</select><Link to="/receiver/capacity" className="min-h-12 inline-flex items-center text-sm font-semibold text-primary">Edit food preferences</Link></div>
         {/* List / Map toggle */}
         <div className="flex gap-1 rounded-xl bg-background p-1 w-fit">
@@ -435,10 +412,10 @@ export default function ReceiverHomePage() {
               <RescueMap
                 showOnlyType="donor"
                 pins={offers.filter(o => o.latitude !== undefined && o.longitude !== undefined).map(o => ({ id:o.id, lat:o.latitude!, lng:o.longitude!, label:o.donor_name || o.locality || "Donor", sublabel:`${o.total_servings} servings · ${o.locality}`, type:"donor" as const, badge:o.rank_badge, distance_km:o.estimated_distance_km, actionLabel:"See listing", onAction:() => setViewMode("list") }))}
-                className="h-72 w-full rounded-2xl overflow-hidden border border-border"
+                className="relative h-96 w-full rounded-2xl overflow-hidden border border-border"
               />
               <p className="text-xs text-muted text-center">
-                Donor locations only · approximate locations · synthetic Hyderabad demo
+                Approximate locations
               </p>
             </div>
           </Suspense>
@@ -456,7 +433,6 @@ export default function ReceiverHomePage() {
                   </span>
                 )}
               </h2>
-              <span className="text-xs text-muted">Auto-refreshes every 3s</span>
             </div>
 
             {offersQuery.isLoading ? (
@@ -464,7 +440,7 @@ export default function ReceiverHomePage() {
             ) : offers.length === 0 && Object.keys(closed).length === 0 ? (
               <EmptyState
                 title="No rescues need you right now"
-                body='Keep "Available" on to receive offers. New listings auto-refresh every 3 seconds.'
+                body="Check your availability or change the filters."
               />
             ) : (
               <div className="grid items-start gap-4 xl:grid-cols-2">
@@ -472,8 +448,6 @@ export default function ReceiverHomePage() {
                   <OfferCard
                     key={offer.id}
                     offer={offer}
-                    claimError={claimErrors[offer.id]}
-                    closedMessage={closed[offer.id]}
                     busy={
                       (claimMutation.isPending && activeOfferId === offer.id) ||
                       declineMutation.isPending
@@ -491,6 +465,7 @@ export default function ReceiverHomePage() {
             )}
           </section>
         )}
+        <ContributionBanner/>
       </div>
     </AppShell>
   );

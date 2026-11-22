@@ -32,6 +32,15 @@ describe("StatusTimeline", () => {
     expect(items[1]).toBe("Matched (current)");
   });
 
+  it("marks delivered and collection done when the confirmed delivery arrives", () => {
+    const { rerender } = render(<StatusTimeline events={[]} status="COLLECTED"/>);
+    expect(screen.getAllByRole("listitem")[3]).toHaveTextContent("Collection (current)");
+    rerender(<StatusTimeline events={[{ to_status: "DELIVERED", created_at: "2026-11-22T08:13:00Z" }]} status="DELIVERED"/>);
+    expect(screen.getAllByRole("listitem")[3]).toHaveTextContent("Collection (done)");
+    expect(screen.getAllByRole("listitem")[4]).toHaveTextContent("Delivered (done)");
+    expect(screen.getAllByRole("listitem")[4]).toHaveTextContent("1:43 pm");
+  });
+
   it("does not describe an unmatched rescue as matched", () => {
     render(<StatusTimeline events={[]} status="MATCHING" />);
     expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("Matching (current)");

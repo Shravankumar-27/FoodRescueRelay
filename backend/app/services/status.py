@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -15,8 +16,8 @@ from app.models.status_event import StatusEvent
 S = RescueStatus
 
 ALLOWED: dict[RescueStatus, frozenset[RescueStatus]] = {
-    S.POSTED: frozenset({S.MATCHING, S.CANCELLED, S.EXPIRED}),
-    S.MATCHING: frozenset({S.OFFERED, S.EXPIRED, S.CANCELLED}),
+    S.POSTED: frozenset({S.MATCHING, S.CLAIMED, S.CANCELLED, S.EXPIRED}),
+    S.MATCHING: frozenset({S.OFFERED, S.CLAIMED, S.EXPIRED, S.CANCELLED}),
     S.OFFERED: frozenset({S.CLAIMED, S.MATCHING, S.EXPIRED, S.CANCELLED}),
     S.CLAIMED: frozenset({S.COLLECTED, S.MATCHING, S.CANCELLED, S.EXPIRED}),
     S.COLLECTED: frozenset({S.DELIVERED}),
@@ -24,6 +25,12 @@ ALLOWED: dict[RescueStatus, frozenset[RescueStatus]] = {
     S.EXPIRED: frozenset(),
     S.CANCELLED: frozenset(),
 }
+
+
+def lock_rescue(db: Session, rescue_id: uuid.UUID) -> Rescue | None:
+    # SQLite has no FOR UPDATE. A no-op write takes its writer lock.
+    db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
+    return db.get(Rescue, rescue_id, populate_existing=True)
 
 
 def transition_rescue(
@@ -39,7 +46,7 @@ def transition_rescue(
     """
     current = RescueStatus(rescue.status)
     if to_status not in ALLOWED.get(current, frozenset()):
-        raise AppError("INVALID_STATUS_TRANSITION", "This rescue cannot move to that status.", 409)
+        raise AppError("RESCUE_STATE_CHANGED", f"This rescue is now {current.value.lower()}. Refresh to see its available actions.", 409)
 
     now = utcnow()
     rescue.status = to_status.value
@@ -50,7 +57,7 @@ def transition_rescue(
             actor_user_id=actor_user_id,
             from_status=current.value,
             to_status=to_status.value,
-            reason=reason,
+            reason=reason[:300] if reason else None,
             created_at=now,
         )
     )

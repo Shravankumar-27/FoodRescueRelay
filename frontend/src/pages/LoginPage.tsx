@@ -4,6 +4,7 @@ import { Utensils, LogIn, Eye, EyeOff, ArrowLeft, ShieldCheck } from "lucide-rea
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../features/auth/AuthContext";
+import { useToast } from "../features/toast/ToastContext";
 import { ApiError } from "../lib/api";
 
 const DEMO_PASSWORD = "demo123";
@@ -43,12 +44,12 @@ const DEMO_ACCOUNTS: { email: string; label: string; role: string; color: string
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { error: toastError } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Pre-fill from landing page ?demo= param
@@ -62,13 +63,12 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     setSubmitting(true);
     try {
       await login(email, password);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      toastError(err instanceof ApiError ? err.message : "Could not sign in. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -77,7 +77,6 @@ export default function LoginPage() {
   function fillDemo(demoEmail: string) {
     setEmail(demoEmail);
     setPassword(DEMO_PASSWORD);
-    setError(null);
   }
 
   return (
@@ -107,10 +106,6 @@ export default function LoginPage() {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-ink">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted">
-            Surplus food has a deadline.{" "}
-            <span className="font-semibold text-primary">RescueRelay beats it.</span>
-          </p>
         </div>
 
         {/* Login form */}
@@ -146,12 +141,6 @@ export default function LoginPage() {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-
-          {error && (
-            <div role="alert" className="rounded-input border border-danger bg-dangerLight p-3 text-sm text-danger">
-              {error}
-            </div>
-          )}
 
           <Button type="submit" size="lg" disabled={submitting}>
             <LogIn className="h-4 w-4" />

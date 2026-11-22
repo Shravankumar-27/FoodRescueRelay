@@ -251,15 +251,21 @@ def seed_demo(session) -> None:
     compute_trust_scores(session)
 
 
-def init_database() -> None:
+def init_database(*, include_history: bool = True) -> None:
     """Create all tables and seed demo data. Safe to run repeatedly."""
     Base.metadata.create_all(engine)
-    from app.db.upgrade import upgrade_schema
+    from app.db.upgrade import upgrade_handoff_workflows, upgrade_schema
     with engine.begin() as connection:
         upgrade_schema(connection)
+        upgrade_handoff_workflows(connection)
     session = SessionLocal()
     try:
-        seed_demo(session)
+        from app.core.config import get_settings
+        if get_settings().DEMO_MODE:
+            seed_demo(session)
+            if include_history:
+                from app.seed.seed_extended import seed_extended
+                seed_extended(session)
         session.commit()
     except Exception:
         session.rollback()

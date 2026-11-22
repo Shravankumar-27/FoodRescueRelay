@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import EmptyState from "../../components/ui/EmptyState";
 import Skeleton from "../../components/ui/Skeleton";
 import StatusBadge from "../../components/rescue/StatusBadge";
+import LogisticsQueue from "../../components/rescue/LogisticsQueue";
 import { useAuth } from "../../features/auth/AuthContext";
 import { apiRequest } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
@@ -30,6 +31,7 @@ export default function AdminRescuesPage() {
 
   return (
     <AppShell title="Rescues" nav="admin">
+      <LogisticsQueue/>
       <div className="flex flex-col gap-4">
         {rescuesQuery.isLoading ? (
           <Skeleton className="h-64 w-full" />

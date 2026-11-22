@@ -31,6 +31,7 @@ class RescueCreate(BaseModel):
     untouched_confirmed: bool
     served_or_mixed_with_waste: bool = False
     packaging_available: bool = False
+    donor_transport_available: bool = False
     safety_attestation: bool
     prepared_at: datetime
     pickup_by: datetime

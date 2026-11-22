@@ -17,7 +17,9 @@ import Card from "../../components/ui/Card";
 import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useToast } from "../../features/toast/ToastContext";
-import { ApiError, apiRequest } from "../../lib/api";
+import { apiRequest } from "../../lib/api";
+import AllocationPuzzle from "../../components/rescue/AllocationPuzzle";
+import PickupLogistics from "../../components/rescue/PickupLogistics";
 import { formatMinutes, statusLabel } from "../../lib/format";
 import { pollInterval } from "../../hooks/usePolling";
 import type { MatchCandidate, RescueDetail } from "../../types/api";
@@ -55,26 +57,16 @@ const HANDLING_LABELS: Record<string, string> = {
   UNKNOWN: "Not specified",
 };
 
-function errorText(e: unknown): string {
-  if (e instanceof ApiError) {
-    if (e.code === "OFFLINE") return "You're offline. Your latest data may be outdated.";
-    if (e.code === "CANCEL_NOT_ALLOWED") return "This rescue can no longer be cancelled.";
-    return e.message;
-  }
-  return "Something went wrong. Please try again.";
-}
-
 type DetailWithFlags = RescueDetail & { matching_error?: boolean };
 
 export default function ActiveRescuePage() {
   const { id = "" } = useParams();
   const { token } = useAuth();
-  const { toast } = useToast();
+  const { toast, error: toastError } = useToast();
   const qc = useQueryClient();
   const [cancelReason, setCancelReason] = useState("");
   const [showCancel, setShowCancel] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const rescue = useQuery({
     queryKey: ["rescue", id],
@@ -88,7 +80,6 @@ export default function ActiveRescuePage() {
   const status = d?.status;
   const matchable = !!status && MATCHABLE.includes(status);
   const cancellable = !!status && CANCELLABLE.includes(status);
-  const offline = rescue.error instanceof ApiError && rescue.error.code === "OFFLINE";
 
   const matches = useQuery({
     queryKey: ["matches", id],
@@ -105,19 +96,24 @@ export default function ActiveRescuePage() {
 
   const dispatch = useMutation({
     mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/dispatch`, { method: "POST", token }),
-    onMutate: () => setActionError(null),
     onSuccess: onRescueUpdated,
-    onError: (e) => setActionError(errorText(e)),
+  });
+  const replacement = useMutation({
+    mutationFn: (receiverId: string) => apiRequest<RescueDetail>(`/rescues/${id}/replacement/${receiverId}`, { method: "POST", token }),
+    onSuccess: data => {
+      onRescueUpdated(data);
+      toast({ variant: "success", title: "Replacement offer sent", message: "The receiver can now accept this donation." });
+    },
+    onError: () => void rescue.refetch(),
   });
 
   const cancel = useMutation({
     mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/cancel`, { method: "POST", token, body: {reason:cancelReason} }),
-    onMutate: () => setActionError(null),
     onSuccess: (data) => {
       onRescueUpdated(data);
       toast({ variant: "info", title: "Rescue cancelled", message: "The listing is closed and reserved capacity is released." });
     },
-    onError: (e) => setActionError(errorText(e)),
+    onError: () => void rescue.refetch(),
   });
 
   function onCancel() {
@@ -131,11 +127,12 @@ export default function ActiveRescuePage() {
       setTimeout(() => setCopied(false), 2000);
       toast({ variant: "success", title: "Code copied!", message: "Share it with the receiver." });
     } catch {
-      setActionError("Couldn't copy the code. Please select it and copy it manually.");
+      toastError("Couldn’t copy the code. Select and copy it manually.");
     }
   }
 
   const flagged = d?.matching_error === true;
+  const release = [...(d?.status_events ?? [])].reverse().find(event => event.reason?.startsWith("receiver_released: "));
   const createdAt = d?.status_events?.[0]?.created_at;
   const postedTooLong =
     status === "POSTED" && !!createdAt && Date.now() - new Date(createdAt).getTime() > RETRY_AFTER_MS;
@@ -150,16 +147,10 @@ export default function ActiveRescuePage() {
 
   return (
     <AppShell title="Rescue" nav="donor" backTo="/donor">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {/* Urgency colour bar */}
         {isUrgent && d && (
-          <div className={`h-1.5 w-full rounded-full ${urgencyBarColor}`} role="presentation" />
-        )}
-
-        {offline && (
-          <div role="status" className="rounded-xl border border-warn/30 bg-warn/5 p-4 text-warn">
-            You're offline. Your latest data may be outdated.
-          </div>
+          <div className={`col-span-full h-1.5 w-full rounded-full ${urgencyBarColor}`} role="presentation" />
         )}
 
         {rescue.isLoading && (
@@ -169,11 +160,7 @@ export default function ActiveRescuePage() {
           </div>
         )}
 
-        {rescue.isError && !offline && (
-          <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
-            {errorText(rescue.error)}
-          </div>
-        )}
+        {rescue.isError && <Button variant="secondary" onClick={() => void rescue.refetch()}>Retry rescue</Button>}
 
         {d && (
           <>
@@ -182,14 +169,13 @@ export default function ActiveRescuePage() {
             </div>
 
             {/* Header card */}
-            <Card>
-              <div className="flex flex-col items-start gap-3">
-                <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <Card className="col-span-full">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-xl font-bold text-ink">{d.display_id}</h2>
                   <StatusBadge status={d.status} />
-                </div>
                 {["POSTED", "MATCHING", "OFFERED", "CLAIMED"].includes(d.status) && <RescueClock pickupBy={d.pickup_by} />}
               </div>
+              <StatusTimeline events={d.status_events ?? []} status={d.status} />
             </Card>
 
             {/* Food details */}
@@ -266,27 +252,34 @@ export default function ActiveRescuePage() {
             )}
 
             {/* In-app Coordinator Chat (Req #4 & #14) */}
+            {d.status === "CLAIMED" && <div className="col-span-full"><PickupLogistics rescueId={id} side="donor"/></div>}
             {d.claimed_receiver && <ChatBox
               rescueId={id}
               recipientName={d.claimed_receiver?.name ?? "Receiver / Volunteer"}
-              defaultOpen={d.status === "CLAIMED" || d.status === "COLLECTED"}
             />}
 
             {/* Matching */}
+            {release && <Card variant="warn"><div role="status">
+              <h3 className="font-semibold">A receiver released this pickup</h3>
+              <p className="mt-1 text-sm">{release.reason?.slice("receiver_released: ".length)}</p>
+              {matchable && <p className="mt-2 text-sm">{d.pending_receiver ? `Replacement offer sent to ${d.pending_receiver}.` : "We’re checking for another compatible receiver."}</p>}
+            </div></Card>}
             {matchable && (
               <Card>
                 <h3 className="mb-3 text-lg font-semibold text-ink">Matching</h3>
                 {matches.isLoading && <Skeleton className="h-24 w-full" />}
-                {matches.isError && (
-                  <p role="alert" className="text-sm text-urgent">
-                    {errorText(matches.error)}
-                  </p>
-                )}
+                {matches.isError && <Button variant="secondary" onClick={() => void matches.refetch()}>Retry matching details</Button>}
                 {matches.data && <MatchExplanation candidates={matches.data} />}
-                {d.status === "MATCHING" && matches.data && matches.data.length === 0 && (
+                {release && matches.data?.some(candidate => candidate.replacement_available) && <div className="mt-4 space-y-2">
+                  <h4 className="text-sm font-semibold">Choose a replacement receiver</h4>
+                  {matches.data.filter(candidate => candidate.replacement_available).map(candidate => candidate.receiver_id && <div key={candidate.receiver_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2">
+                    <span className="text-sm">{candidate.receiver_name}</span>
+                    <Button variant="secondary" disabled={replacement.isPending || candidate.receiver_name === d.pending_receiver} onClick={() => replacement.mutate(candidate.receiver_id!)}>{candidate.receiver_name === d.pending_receiver ? "Offer sent" : "Offer this donation"}</Button>
+                  </div>)}
+                </div>}
+                {d.status === "MATCHING" && matches.data && !matches.data.some(candidate => candidate.feasible) && (
                   <p className="text-sm text-muted">
-                    No currently available receiver can safely reach this rescue before the pickup deadline.
-                    We'll continue checking while the rescue remains active.
+                    No compatible receiver available yet.
                   </p>
                 )}
                 {needsRetry && (
@@ -306,14 +299,12 @@ export default function ActiveRescuePage() {
                 )}
               </Card>
             )}
+            {matchable && <div className="col-span-full"><AllocationPuzzle key={id} rescueId={id}/></div>}
 
             {/* Expired / cancelled states */}
             {d.status === "EXPIRED" && (
               <Card variant="warn">
                 <p className="font-semibold text-warn">Pickup window ended</p>
-                <p className="text-sm text-muted mt-1">
-                  This rescue will no longer be offered to receivers.
-                </p>
                 <Link
                   to="/donor/rescue/new"
                   className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
@@ -325,7 +316,6 @@ export default function ActiveRescuePage() {
 
             {d.status === "CANCELLED" && (
               <Card>
-                <p className="text-muted">This rescue was cancelled. No receiver will collect this food.</p>
                 <Link
                   to="/donor/rescue/new"
                   className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
@@ -386,24 +376,6 @@ export default function ActiveRescuePage() {
               </div>
             )}
 
-            {actionError && (
-              <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
-                {actionError}
-              </div>
-            )}
-
-            {/* Timeline */}
-            <Card>
-              <h3 className="mb-4 text-lg font-semibold text-ink">Timeline</h3>
-              <StatusTimeline events={d.status_events ?? []} status={d.status} />
-            </Card>
-
-            {/* Safety disclaimer */}
-            <div className="rounded-xl border border-border bg-background p-3 text-xs text-muted">
-              <strong>Handling information provided by donor.</strong> Receiver must independently verify
-              suitability before accepting or distributing the food. RescueRelay coordinates food recovery
-              and does not certify food safety.
-            </div>
           </>
         )}
       </div>

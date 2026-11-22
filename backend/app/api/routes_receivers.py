@@ -30,6 +30,9 @@ class CapacityUpdate(BaseModel):
     accepts_veg: bool
     accepts_non_veg: bool
     transport_available: bool
+    containers_available: bool | None = None
+    refrigeration_available: bool | None = None
+    volunteer_servings: int | None = Field(default=None, ge=0, le=100000)
     need_level: NeedLevel
     accepted_dietary_types: list[DietaryType] | None = None
     accepted_food_categories: list[FoodCategory] | None = None
@@ -72,6 +75,9 @@ def _serialize(capacity: ReceiverCapacity, db) -> dict[str, Any]:
         "accepts_veg": capacity.accepts_veg,
         "accepts_non_veg": capacity.accepts_non_veg,
         "transport_available": capacity.transport_available,
+        "containers_available": capacity.containers_available,
+        "refrigeration_available": capacity.refrigeration_available,
+        "volunteer_servings": capacity.volunteer_servings,
         "need_level": capacity.need_level,
         "accepted_dietary_types": capacity.accepted_dietary_types or [],
         "accepted_food_categories": capacity.accepted_food_categories or [],
@@ -120,6 +126,12 @@ def update_capacity(
     capacity.accepts_veg = body.accepts_veg
     capacity.accepts_non_veg = body.accepts_non_veg
     capacity.transport_available = body.transport_available
+    if body.containers_available is not None:
+        capacity.containers_available = body.containers_available
+    if body.refrigeration_available is not None:
+        capacity.refrigeration_available = body.refrigeration_available
+    if "volunteer_servings" in body.model_fields_set:
+        capacity.volunteer_servings = body.volunteer_servings
     capacity.need_level = body.need_level.value
     for name in ("accepted_dietary_types", "accepted_food_categories", "excluded_allergens", "description"):
         value = getattr(body, name)
@@ -181,6 +193,7 @@ def list_nearby_receivers(
                 "available_servings": free_servings(db, cap),
                 "need_level": cap.need_level if cap else "MEDIUM",
                 "transport_available": cap.transport_available if cap else False,
+                "refrigeration_available": cap.refrigeration_available,
                 "accepts_veg": cap.accepts_veg if cap else True,
                 "accepts_non_veg": cap.accepts_non_veg if cap else True,
             })

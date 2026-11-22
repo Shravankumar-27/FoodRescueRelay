@@ -18,7 +18,7 @@ import app.models  # noqa: F401
 from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import FoodItem, Organization, ReceiverCapacity, Rescue, StatusEvent, User
+from app.models import AllocationNotice, DonationRecognition, FoodAllocationPlan, FoodItem, Handoff, ImpactRecord, LogisticsProvider, MatchOffer, MealFeedback, Organization, PartnerMessage, PartnerRating, PickupLogistics, ReceiverCapacity, Rescue, StatusEvent, User
 from app.models.base_types import new_uuid
 from app.models.enums import (
     DietaryType,
@@ -32,7 +32,6 @@ from app.models.enums import (
 from app.services.rescue_service import derive_dietary_type
 
 DEMO_PASSWORD = "demo123"
-RNG = Random(42)  # deterministic
 
 # ── Extended organisations ──────────────────────────────────────────────────
 # Donors: caterers / event venues across Hyderabad
@@ -164,7 +163,7 @@ def _ensure_user(session, email: str, org_id: str, name: str,
 
 
 def _ensure_capacity(session, org_id: str, max_servings: int, need_level: str,
-                     accepts_veg: bool, accepts_non_veg: bool, transport: bool) -> None:
+                     accepts_veg: bool, accepts_non_veg: bool, transport: bool, index: int) -> None:
     if not session.execute(
         select(ReceiverCapacity).where(ReceiverCapacity.organization_id == org_id)
     ).scalar_one_or_none():
@@ -176,6 +175,11 @@ def _ensure_capacity(session, org_id: str, max_servings: int, need_level: str,
             accepts_veg=accepts_veg,
             accepts_non_veg=accepts_non_veg,
             transport_available=transport,
+            containers_available=index % 4 != 3,
+            refrigeration_available=index % 3 == 1,
+            volunteer_servings=max_servings // 2 if index % 4 == 2 else None,
+            accepted_food_categories=["COOKED_MEAL", "BAKERY", "PACKAGED"] if index % 3 == 1 else [],
+            accepted_dietary_types=["VEG", "VEGAN", "JAIN", "RAW_VEGAN"] if not accepts_non_veg else [],
             need_level=need_level,
         ))
 
@@ -190,16 +194,14 @@ def _make_historical_rescue(
     allergens: list,
     qty: int,
     handling: str,
+    rng: Random,
     delivered_to: Organization | None = None,
 ) -> None:
     """Create a completed/expired/cancelled rescue for history."""
     now = datetime.now(timezone.utc)
     created_at = now - timedelta(days=days_ago)
-    pickup_by = created_at + timedelta(hours=RNG.randint(1, 3))
-    display_id = f"RR-{RNG.randint(10000, 99999):05d}"
-
-    # Check idempotency by display_id prefix pattern won't collide; just check if already seeded
-    # (simple: skip if more than 30 historical rescues already exist)
+    pickup_by = created_at + timedelta(hours=rng.randint(1, 3))
+    display_id = f"RR-{rng.randint(10000, 99999):05d}"
 
     food_items = [_make_food_item(food_name, dietary, allergens, qty, created_at)]
     rescue = Rescue(
@@ -220,32 +222,24 @@ def _make_historical_rescue(
         locality=donor_org.locality,
         total_servings=qty,
         dietary_type=dietary,
-        idempotency_key=str(new_uuid()),  # unique each time, stored as string
+        idempotency_key=f"demo-history-v1-{display_id}",
         created_at=created_at,
         updated_at=created_at,
     )
     rescue.food_items = food_items
 
-    if final_status == RescueStatus.DELIVERED.value and delivered_to:
-        rescue.claimed_receiver_id = delivered_to.id
-        rescue.pickup_code = str(RNG.randint(1000, 9999))
-        rescue.delivered_servings = int(qty * 0.95)
-        rescue.rejected_servings = qty - rescue.delivered_servings
-        rescue.collected_servings = qty
-        rescue.minutes_to_delivery = RNG.randint(25, 90)
-
-    session.add(rescue)
-    session.flush()
-
-    # Status events
+    # Retain the legacy generator's sequence to recognize its existing demo rows.
+    if final_status == RescueStatus.DELIVERED.value:
+        rng.randint(1000, 9999)
+        rng.randint(25, 90)
     events = [
         (RescueStatus.POSTED.value,    created_at),
         (RescueStatus.MATCHING.value,  created_at + timedelta(minutes=1)),
     ]
     if final_status == RescueStatus.DELIVERED.value:
         claim_at = created_at + timedelta(minutes=5)
-        collect_at = claim_at + timedelta(minutes=RNG.randint(15, 40))
-        deliver_at = collect_at + timedelta(minutes=RNG.randint(10, 30))
+        collect_at = claim_at + timedelta(minutes=rng.randint(15, 40))
+        deliver_at = collect_at + timedelta(minutes=rng.randint(10, 30))
         events += [
             (RescueStatus.OFFERED.value,    claim_at - timedelta(minutes=1)),
             (RescueStatus.CLAIMED.value,    claim_at),
@@ -257,19 +251,90 @@ def _make_historical_rescue(
         events.append((RescueStatus.EXPIRED.value, pickup_by + timedelta(minutes=1)))
         rescue.updated_at = pickup_by + timedelta(minutes=1)
     elif final_status == RescueStatus.CANCELLED.value:
-        cancel_at = created_at + timedelta(minutes=RNG.randint(2, 20))
+        cancel_at = created_at + timedelta(minutes=rng.randint(2, 20))
         events.append((RescueStatus.CANCELLED.value, cancel_at))
         rescue.updated_at = cancel_at
 
-    for to_status, evt_at in events:
-        session.add(StatusEvent(
-            rescue_id=rescue.id,
-            actor_user_id=None,
-            from_status=None,
-            to_status=to_status,
-            reason=None,
-            created_at=evt_at,
+    existing = session.scalar(select(Rescue).where(Rescue.display_id == display_id))
+    if existing:
+        if (existing.donor_organization_id != donor_org.id or existing.status != final_status
+                or existing.total_servings != qty or not any(item.name == food_name for item in existing.food_items)
+                or any(event.actor_user_id is not None for event in existing.status_events)):
+            return
+        if existing.idempotency_key == rescue.idempotency_key and existing.impact and existing.handoff:
+            return
+        rescue = existing
+        times = {event.to_status: event.created_at for event in rescue.status_events}
+    else:
+        session.add(rescue)
+        session.flush()
+        previous = None
+        for to_status, evt_at in events:
+            session.add(StatusEvent(rescue_id=rescue.id, from_status=previous, to_status=to_status, created_at=evt_at))
+            previous = to_status
+        times = dict(events)
+    if final_status == RescueStatus.DELIVERED.value and delivered_to and all(
+        status in times for status in ("OFFERED", "CLAIMED", "COLLECTED", "DELIVERED")
+    ):
+        _seed_delivery(session, rescue, donor_org, delivered_to, qty, times)
+
+
+def _seed_delivery(session, rescue, donor, receiver, quantity, times):
+    offer = session.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue.id, MatchOffer.status == "ACCEPTED"))
+    if offer is None:
+        session.add(MatchOffer(
+            rescue_id=rescue.id, receiver_organization_id=receiver.id, status="ACCEPTED", rank=1,
+            score=.85, proximity_score=.9, urgency_score=.8, need_score=.8, reliability_score=receiver.reliability,
+            fairness_score=.7, estimated_distance_km=3, estimated_travel_minutes=15,
+            offered_at=times["OFFERED"], claimed_at=times["CLAIMED"], created_at=times["OFFERED"],
+            expires_at=times["COLLECTED"],
         ))
+    elif offer.receiver_organization_id != receiver.id:
+        return
+    delivered = int(quantity * .95)
+    if rescue.handoff is None:
+        rescue.handoff = Handoff(
+            collected_servings=quantity, delivered_servings=delivered, rejected_servings=quantity - delivered,
+            created_at=times["CLAIMED"], collected_at=times["COLLECTED"], delivered_at=times["DELIVERED"],
+        )
+    if rescue.impact is None:
+        rescue.impact = ImpactRecord(
+            donor_organization_id=donor.id, receiver_organization_id=receiver.id,
+            delivered_servings=delivered, created_at=times["DELIVERED"],
+        )
+    else:
+        delivered = rescue.impact.delivered_servings
+    rescue.idempotency_key = f"demo-history-v1-{rescue.display_id}"
+    user = session.scalar(select(User).where(User.organization_id == receiver.id, User.role == "RECEIVER").limit(1))
+    if user and not session.scalar(select(DonationRecognition.id).where(DonationRecognition.rescue_id == rescue.id)):
+        session.add(DonationRecognition(
+            rescue_id=rescue.id, receiver_organization_id=receiver.id, issued_by_user_id=user.id,
+            people_served=delivered, food_rating=5 if quantity % 20 == 0 else 4, donor_name=donor.name,
+            receiver_name=receiver.name, issued_at=times["DELIVERED"],
+            message=f"Thank you for sharing {delivered} servings with our community.",
+        ))
+    if session.get(MealFeedback, rescue.id) is None:
+        session.add(MealFeedback(rescue_id=rescue.id, answers={
+            "taste": 5 if quantity % 20 == 0 else 4, "packaging": 4, "dietary_fit": 5,
+            "staple_portion": "too_large" if quantity >= 100 else "about_right",
+            "vegetable_portion": "too_small" if quantity >= 100 else "about_right",
+        }))
+    if receiver.name == "Hope Community Kitchen" and not session.scalar(
+        select(FoodAllocationPlan.id).where(FoodAllocationPlan.rescue_id == rescue.id)
+    ):
+        session.add(FoodAllocationPlan(
+            rescue_id=rescue.id, receiver_organization_id=receiver.id, updated_at=times["DELIVERED"],
+            groups=[
+                {"name": "Community lunch", "people": delivered // 2, "servings": delivered // 2, "dietary_notes": ""},
+                {"name": "Evening service", "people": delivered - delivered // 2, "servings": delivered - delivered // 2, "dietary_notes": ""},
+            ],
+        ))
+    for author, target in ((donor, receiver), (receiver, donor)):
+        if not session.scalar(select(PartnerRating.id).where(
+            PartnerRating.rescue_id == rescue.id, PartnerRating.author_org_id == author.id
+        )):
+            session.add(PartnerRating(rescue_id=rescue.id, author_org_id=author.id, target_org_id=target.id,
+                                      stars=5 if quantity % 20 == 0 else 4, created_at=times["DELIVERED"]))
 
 
 def seed_extended(session) -> None:
@@ -296,7 +361,7 @@ def seed_extended(session) -> None:
     for i, (name, org_type, locality, lat, lon, rel, max_srv, need, veg, nonveg, transport) in enumerate(_RECEIVER_ORGS):
         org = _ensure_org(session, name, org_type, locality, lat, lon, rel, None, None)
         receiver_orgs.append(org)
-        _ensure_capacity(session, org.id, max_srv, need, veg, nonveg, transport)
+        _ensure_capacity(session, org.id, max_srv, need, veg, nonveg, transport, i)
         if i < len(_RECEIVER_USERS):
             _ensure_user(session, _RECEIVER_USERS[i][0], org.id,
                          _RECEIVER_USERS[i][3], _RECEIVER_USERS[i][2], ph)
@@ -304,12 +369,8 @@ def seed_extended(session) -> None:
     session.flush()
 
     # Historical rescues — only add if fewer than 15 exist (idempotency)
-    from sqlalchemy import func
-    rescue_count = session.execute(select(func.count()).select_from(Rescue)).scalar() or 0
-    if rescue_count >= 15:
-        return  # already seeded
 
-    # 30 historical rescues spanning 4 weeks
+    # Historical rescues spanning four weeks.
     history = [
         # (days_ago, status, food_idx, donor_idx, receiver_idx, qty)
         (28, RescueStatus.DELIVERED.value, 0, 0, 0, 100),
@@ -344,36 +405,94 @@ def seed_extended(session) -> None:
         (0.5,RescueStatus.DELIVERED.value, 14, 2, 5, 90),
     ]
 
+    rng = Random(42)
     for days_ago, status, food_idx, donor_idx, recv_idx, qty in history:
         food_name, dietary, allergens = _FOOD_TEMPLATES[food_idx % len(_FOOD_TEMPLATES)]
         donor_org = donor_orgs[donor_idx % len(donor_orgs)]
         recv_org = receiver_orgs[recv_idx % len(receiver_orgs)] if recv_idx is not None else None
-        handling = _HANDLING[RNG.randint(0, len(_HANDLING) - 1)]
+        handling = _HANDLING[rng.randint(0, len(_HANDLING) - 1)]
         _make_historical_rescue(
             session, donor_org, days_ago, status,
-            food_name, dietary, allergens, qty, handling,
+            food_name, dietary, allergens, qty, handling, rng,
             delivered_to=recv_org,
         )
 
+    session.flush()
+    _seed_active_scenarios(session, donor_orgs, receiver_orgs)
+    from app.services.trust_service import compute_trust_scores
+    compute_trust_scores(session)
+
+
+def _seed_active_scenarios(session, donors, receivers):
+    from app.services.handoff_service import store_pickup_code
+    from app.services.rescue_helpers import new_display_id
+    now = datetime.now(timezone.utc)
+    descriptions = (
+        ("split", donors[0], "Vegetable pulao", "VEG", 200, "COOKED_MEAL", "HOT_HELD"),
+        ("bakery", donors[1], "Wheat rolls", "VEG", 40, "BAKERY", "ROOM_TEMPERATURE"),
+        ("cold", donors[3], "Chilled fruit cups", "VEGAN", 35, "FRUIT_VEG", "REFRIGERATED"),
+        ("support", donors[4], "Dal and rice", "VEG", 45, "COOKED_MEAL", "HOT_HELD"),
+    )
+    for label, donor, name, diet, quantity, category, handling in descriptions:
+        prefix = f"demo-scenario-{label}-"
+        if session.scalar(select(Rescue.id).where(
+            Rescue.donor_organization_id == donor.id,
+            Rescue.idempotency_key.startswith(prefix), Rescue.pickup_by > now,
+        ).limit(1)):
+            continue
+        key = f"{prefix}{now:%Y%m%d%H%M}"
+        item = _make_food_item(name, diet, ["gluten"] if label == "bakery" else [], quantity, now)
+        item.food_category = category
+        rescue = Rescue(
+            id=new_uuid(), display_id=new_display_id(), donor_organization_id=donor.id, status="POSTED",
+            prepared_at=now - timedelta(minutes=20), pickup_by=now + timedelta(minutes=100),
+            handling_type=handling, untouched_confirmed=True, packaging_available=label != "support",
+            safety_attestation=True, latitude=donor.latitude, longitude=donor.longitude, locality=donor.locality,
+            private_address=donor.private_address or "", total_servings=quantity, dietary_type=derive_dietary_type([diet]),
+            idempotency_key=key, created_at=now, updated_at=now, food_items=[item],
+        )
+        session.add(rescue)
+        session.flush()
+        session.add(StatusEvent(rescue_id=rescue.id, to_status="POSTED", created_at=now))
+        if label == "split":
+            message = PartnerMessage(sender_org_id=donor.id, recipient_org_id=receivers[0].id,
+                                     message=f"Split proposal for {rescue.display_id} · 30 servings", created_at=now)
+            session.add(message)
+            session.flush()
+            session.add(AllocationNotice(message_id=message.id, rescue_id=rescue.id, items=[{
+                "id": str(item.id), "name": item.name, "diet": item.dietary_type, "servings": 30,
+            }]))
+        if label == "support":
+            rescue.status = "CLAIMED"
+            offer = MatchOffer(
+                rescue_id=rescue.id, receiver_organization_id=receivers[6].id, rank=1,
+                score=.8, proximity_score=.8, urgency_score=.8, need_score=.8, reliability_score=.8,
+                fairness_score=.8, estimated_distance_km=5, estimated_travel_minutes=20,
+                status="ACCEPTED", offered_at=now, expires_at=rescue.pickup_by, claimed_at=now, created_at=now,
+            )
+            session.add(offer)
+            session.flush()
+            session.add(PickupLogistics(offer_id=offer.id, donor_containers=False, donor_transport=False,
+                                        receiver_containers=False, receiver_transport=False, arrangements={}))
+            handoff = Handoff(rescue_id=rescue.id, pickup_code_expires_at=rescue.pickup_by)
+            store_pickup_code(handoff, "4826")
+            session.add(handoff)
+            session.add(StatusEvent(rescue_id=rescue.id, from_status="POSTED", to_status="CLAIMED",
+                                    created_at=now + timedelta(microseconds=1)))
+    for name, resource in (("Demo Container Bank", "containers"), ("Demo Community Courier", "transport")):
+        if not session.scalar(select(LogisticsProvider.id).where(LogisticsProvider.name == name)):
+            session.add(LogisticsProvider(
+                name=name, contact=f"{resource}@rescuerelay.example", resource=resource,
+                service_area="Hyderabad", max_servings=300, refrigeration=True, available=True,
+            ))
     session.flush()
 
 
 def init_extended() -> None:
     """Create all tables and seed extended data. Safe to run repeatedly."""
-    Base.metadata.create_all(engine)
-    session = SessionLocal()
-    try:
-        # Run base seed first
-        from app.seed.init_db import seed_demo
-        seed_demo(session)
-        seed_extended(session)
-        session.commit()
-        print("Extended seed complete.")
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    from app.seed.init_db import init_database
+    init_database()
+    print("Extended seed complete.")
 
 
 def reset_extended() -> None:

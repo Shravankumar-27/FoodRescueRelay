@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -141,6 +141,9 @@ def create_rescue(
     created=False and the payload is not re-validated.
     Caller commits.
     """
+    # Serialize duplicate submissions from the same organization before looking up the key.
+    db.execute(update(Organization).where(Organization.id == donor_user.organization_id)
+               .values(updated_at=Organization.updated_at))
     existing = db.scalar(
         select(Rescue).where(
             Rescue.donor_organization_id == donor_user.organization_id,
@@ -155,7 +158,7 @@ def create_rescue(
     pickup_by = ensure_utc(payload.pickup_by)
     total = _validate(payload, current, prepared_at, pickup_by)
 
-    org: Organization = donor_user.organization
+    org = db.get(Organization, donor_user.organization_id, populate_existing=True)
     if org.verification_status != "VERIFIED":
         raise AppError("DONOR_NOT_VERIFIED", "Your organization must be verified before posting surplus.", 403)
     food_items = _build_food_items(payload, current)
@@ -173,6 +176,7 @@ def create_rescue(
         handling_notes=notes or None,
         untouched_confirmed=payload.untouched_confirmed,
         packaging_available=payload.packaging_available,
+        donor_transport_available=payload.donor_transport_available,
         safety_attestation=payload.safety_attestation,
         latitude=payload.latitude if payload.latitude is not None else org.latitude,
         longitude=payload.longitude if payload.longitude is not None else org.longitude,
@@ -206,9 +210,9 @@ def create_rescue(
     try:
         with db.begin_nested():
             start_dispatch(db, rescue, current)
-    except Exception as exc:  # noqa: BLE001 - recorded, not propagated to donor
+    except Exception:  # noqa: BLE001 - recorded, not propagated to donor
         matching_error = True
-        logger.error("Dispatch failed during rescue creation: %s", type(exc).__name__)
+        logger.exception("Dispatch failed for rescue %s", rescue.id)
         db.add(
             StatusEvent(
                 rescue_id=rescue.id,
@@ -323,6 +327,10 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         data["latitude"] = rescue.latitude
         data["longitude"] = rescue.longitude
         data["status_events"] = _status_events(rescue)
+        pending = next((offer for offer in rescue.offers if offer.status == "PENDING"), None)
+        if pending:
+            pending_org = db.get(Organization, pending.receiver_organization_id)
+            data["pending_receiver"] = pending_org.name if pending_org else None
         if claimed_offer is not None:
             receiver_org = db.get(Organization, claimed_offer.receiver_organization_id)
             data["claimed_receiver"] = {
@@ -339,7 +347,7 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         if is_donor_owner(viewer, rescue):
             data["pickup_code"] = get_pickup_code_for_donor(db, rescue)
     elif receiver_claimed:
-        data["status_events"] = _status_events(rescue)
+        data["status_events"] = _status_events(rescue, include_release_reason=False)
 
     if (owner_view or receiver_claimed) and rescue.status == RescueStatus.DELIVERED.value and rescue.impact is not None:
         handoff = rescue.handoff
@@ -359,12 +367,12 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
     return data
 
 
-def _status_events(rescue: Rescue) -> list[dict[str, Any]]:
+def _status_events(rescue: Rescue, include_release_reason: bool = True) -> list[dict[str, Any]]:
     return [
         {
             "from_status": event.from_status,
             "to_status": event.to_status,
-            "reason": event.reason,
+            "reason": event.reason if include_release_reason or not (event.reason or "").startswith("receiver_released: ") else None,
             "created_at": iso_utc(event.created_at),
         }
         for event in rescue.status_events

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,8 @@ from app.models.offer import MatchOffer
 from app.models.rescue import Rescue
 from app.models.user import User
 from app.services.handoff_service import verify_pickup_code
-from app.services.status import transition_rescue
+from app.services.logistics_service import accepted_offer, logistics_for, logistics_state
+from app.services.status import lock_rescue, transition_rescue
 from app.services.rescue_helpers import ensure_utc
 
 IMPACT_CALCULATION_VERSION = "v1"
@@ -60,17 +61,24 @@ def collect_rescue(
     On a wrong code the failed attempt is committed before AppError is raised.
     """
     _require_accepted_receiver(db, rescue, receiver_user)
-    db.execute(update(Rescue).where(Rescue.id == rescue.id).values(updated_at=Rescue.updated_at))
-    db.refresh(rescue)
+    lock_rescue(db, rescue.id)
     _require_accepted_receiver(db, rescue, receiver_user)
     if rescue.status == RescueStatus.CLAIMED.value and ensure_utc(rescue.pickup_by) <= ensure_utc(now):
         transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason="pickup_window_ended")
         db.commit()
         raise AppError("PICKUP_WINDOW_ENDED", "The pickup deadline has passed. Do not collect this food.", 409)
+    if rescue.status == RescueStatus.EXPIRED.value:
+        raise AppError("PICKUP_WINDOW_ENDED", "The pickup deadline has passed. Do not collect this food.", 409)
+    if rescue.status in (RescueStatus.COLLECTED.value, RescueStatus.DELIVERED.value):
+        return _load_handoff(db, rescue)
     if rescue.status != RescueStatus.CLAIMED.value:
         raise AppError("INVALID_STATUS_TRANSITION", "This rescue is not ready for pickup.", 409)
     if not 1 <= collected_servings <= rescue.total_servings:
         raise AppError("INVALID_QUANTITY", "Collected servings cannot exceed the posted total.", 422)
+
+    logistics = logistics_for(db, rescue, accepted_offer(db, rescue.id))
+    if any(resource["needs_help"] for resource in logistics_state(logistics).values()):
+        raise AppError("LOGISTICS_PENDING", "Arrange the missing containers or transport before confirming collection.", 409)
 
     handoff = _load_handoff(db, rescue)
     if not verify_pickup_code(handoff, pickup_code, now):
@@ -97,13 +105,12 @@ def deliver_rescue(
     Idempotent: a rescue that is already DELIVERED returns its existing impact
     record without changing anything.
     """
-    db.execute(update(Rescue).where(Rescue.id == rescue.id).values(updated_at=Rescue.updated_at))
-    db.refresh(rescue)
+    lock_rescue(db, rescue.id)
     _require_accepted_receiver(db, rescue, receiver_user)
     if rescue.status == RescueStatus.DELIVERED.value:
         existing = _impact_for(db, rescue)
         if existing is None:
-            raise AppError("INVALID_STATUS_TRANSITION", "This rescue cannot move to that status.", 409)
+            raise AppError("DELIVERY_RECORD_MISSING", "The delivery is marked complete but its impact record is missing.", 409)
         return existing
     if rescue.status != RescueStatus.COLLECTED.value:
         raise AppError("INVALID_STATUS_TRANSITION", "This rescue is not ready for delivery.", 409)

@@ -40,6 +40,7 @@ __all__ = [
     "User",
 ]
 
-from app.models.community import PartnerMessage, PartnerRating
+from app.models.community import AllocationNotice, FavoritePartner, PartnerMessage, PartnerRating
 from app.models.recognition import DonationRecognition
 from app.models.allocation import FoodAllocationPlan
+from app.models.handoff_workflow import LogisticsProvider, MealFeedback, PickupLogistics

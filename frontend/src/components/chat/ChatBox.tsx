@@ -4,7 +4,8 @@ import { MessageSquare, Send, ChevronDown, ChevronUp, Sparkles } from "lucide-re
 import Button from "../ui/Button";
 import { useAuth } from "../../features/auth/AuthContext";
 import { apiRequest } from "../../lib/api";
-import { timeAgo } from "../../lib/format";
+import { formatDateTime, timeAgo } from "../../lib/format";
+import { foodLabel } from "../../lib/food";
 import type { ChatData } from "../../types/api";
 
 interface ChatBoxProps {
@@ -101,8 +102,7 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
       {/* Collapsible Chat Body */}
       {isOpen && (
         <div className="p-3.5 flex flex-col gap-3">
-          {chatQuery.isError && <p role="alert" className="text-sm text-danger">{chatQuery.error.message}</p>}
-          {sendMutation.isError && <p role="alert" className="text-sm text-danger">{sendMutation.error.message}</p>}
+          {chatQuery.isError && <Button variant="secondary" size="sm" onClick={() => void chatQuery.refetch()}>Retry messages</Button>}
           {/* Messages list */}
           <div role="log" aria-live="polite" className="max-h-56 min-h-24 overflow-y-auto flex flex-col gap-2 p-1 rounded-xl bg-background border border-border/60">
             {chatQuery.isLoading ? (
@@ -136,7 +136,16 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
                           : "bg-surface border border-border text-ink rounded-bl-none"
                       }`}
                     >
-                      {m.message}
+                      {m.allocation_proposal ? <div className="space-y-1">
+                        <p className="font-bold">{m.message}</p>
+                        <ul className="list-inside list-disc">
+                          {m.allocation_proposal.items.map(item => <li key={item.id}>{item.servings} × {item.name} · {foodLabel(item.diet)}</li>)}
+                        </ul>
+                        <p>Pickup by {formatDateTime(m.allocation_proposal.pickup_by)} IST · {m.allocation_proposal.locality}</p>
+                        <p>{m.allocation_proposal.status === "open" ? "Reply to confirm availability and coordinate pickup."
+                          : m.allocation_proposal.status === "closed" ? "This rescue is closed to proposals."
+                          : "A newer proposal replaced this one."}</p>
+                      </div> : m.message}
                     </div>
                   </div>
                 );
