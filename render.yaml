@@ -1,0 +1,49 @@
+# Food Rescue Relay demo: one Blueprint manages the API and React site.
+# Configure this Blueprint with your Neon pooled URL when prompted.
+services:
+  - type: web
+    name: RescueRelay
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_TARGET
+        value: neon
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: DEMO_MODE
+        value: "true"
+      - key: DISPATCH_OFFER_TIMEOUT_SECONDS
+        value: "120"
+      - key: MATCHING_SAFETY_BUFFER_MINUTES
+        value: "10"
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: rescuerelay-ui
+          envVarKey: RENDER_EXTERNAL_URL
+
+  - type: web
+    runtime: static
+    name: rescuerelay-ui
+    rootDir: ./frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: RescueRelay
+          envVarKey: RENDER_EXTERNAL_URL

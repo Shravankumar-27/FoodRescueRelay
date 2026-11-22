@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ApiError, apiRequest } from "../../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import type { LoginData, MeData, OrganizationOut, UserOut } from "../../types/api";
+import type { LoginData, MeData, OrganizationOut, SignupRequest, UserOut } from "../../types/api";
 import { useToast } from "../toast/ToastContext";
 
 const STORAGE_KEY = "rr.session";
@@ -25,6 +25,7 @@ interface AuthContextValue {
   organization: OrganizationOut | null;
   token: string | null;
   login: (email: string, password: string) => Promise<LoginData>;
+  signup: (details: SignupRequest) => Promise<void>;
   logout: () => void;
   isReady: boolean;
 }
@@ -100,11 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [initial, toastError, queryClient]);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginData> => {
-    const data = await apiRequest<LoginData>("/auth/login", {
-      method: "POST",
-      body: { email, password },
-    });
+  const startSession = useCallback(async (data: LoginData) => {
     const next: Session = {
       token: data.token,
       user: data.user,
@@ -117,8 +114,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeSession(next);
     setSession(next);
     setIsReady(true);
-    return data;
   }, [queryClient]);
+
+  const login = useCallback(async (email: string, password: string): Promise<LoginData> => {
+    const data = await apiRequest<LoginData>("/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    await startSession(data);
+    return data;
+  }, [startSession]);
+
+  const signup = useCallback(async (details: SignupRequest) => {
+    const data = await apiRequest<LoginData>("/auth/signup", { method: "POST", body: details });
+    await startSession(data);
+  }, [startSession]);
 
   const logout = useCallback(() => {
     void queryClient.cancelQueries();
@@ -135,10 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organization: session?.organization ?? null,
       token: session?.token ?? null,
       login,
+      signup,
       logout,
       isReady,
     }),
-    [session, login, logout, isReady],
+    [session, login, signup, logout, isReady],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

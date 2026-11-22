@@ -86,4 +86,4 @@ def donor_report(request: Request, db: DbSession, user: User = Depends(require_r
     writer.writerow(["Rescue", "Confirmed at (UTC)", "Delivered meals", "Estimated food kg (0.4 kg/meal)", "Estimated CO2e kg (2.5 kg/kg)"])
     for code, at, meals in rows:
         writer.writerow([code, at.isoformat(), meals, round(meals * .4, 1), round(meals * .4 * 2.5, 1)])
-    return Response(output.getvalue(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="rescuerelay-impact.csv"'})
+    return Response(output.getvalue(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="food-rescue-relay-impact.csv"'})

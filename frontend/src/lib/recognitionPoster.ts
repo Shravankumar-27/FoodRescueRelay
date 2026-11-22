@@ -31,7 +31,7 @@ export function recognitionPosterSvg(record: DonationRecognition, theme: PosterT
     third: record.food_rating === null ? "Not rated" : `${record.food_rating} / 5 food feedback`,
     thirdNote: "Receiver opinion, not a safety assessment",
     quote: audience === "donor" ? record.message || "Good food deserves a place at the table. Thank you for sharing yours." : "You turned surplus into shared meals. Receiving with care is an act of community leadership.",
-    issuer: record.issuer_role === "ADMIN" ? "Certificate issued by RescueRelay"
+    issuer: record.issuer_role === "ADMIN" ? "Certificate issued by Food Rescue Relay"
       : audience === "donor" ? `Confirmed & issued by ${record.receiver_name}` : `Food contributed by ${record.donor_name}`,
     footer: `${record.display_id} · ${new Date(record.issued_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC`,
     badge: "WITH CARE", theme,
@@ -61,7 +61,7 @@ export function storyPoster(d: StoryPosterData) {
   <path d="M-120 1100 Q270 900 550 1130 T1200 1070 L1200 1350 H-120Z" fill="${accent}" opacity=".7"/>
   <rect x="27" y="27" width="1026" height="1296" rx="28" fill="none" stroke="${gold}" opacity=".65"/>
   <g font-family="Arial, Helvetica, sans-serif">
-  ${text("RescueRelay",72,98,29,ink,800)}${text("THE COMMUNITY TABLE",1008,96,18,gold,700,"end")}
+  ${text("Food Rescue Relay",72,98,29,ink,800)}${text("THE COMMUNITY TABLE",1008,96,18,gold,700,"end")}
   ${text(d.eyebrow,72,178,18,gold,700)}
   ${block(d.title,22,72,250,57,ink,800)}
   <path d="M839 263 L819 327 L873 299 L928 327 L910 263" fill="${gold}" opacity=".7"/>
@@ -90,7 +90,7 @@ export function storyPoster(d: StoryPosterData) {
   ${block(d.issuer,82,76,1120,20,ink,700)}
   ${text(d.footer,76,1220,18,muted)}
   ${text(d.disclaimer,76,1261,16,muted)}
-  ${text("RESCUERELAY · CONTRIBUTION RECOGNITION",76,1292,16,gold,700)}
+  ${text("FOOD RESCUE RELAY · CONTRIBUTION RECOGNITION",76,1292,16,gold,700)}
   </g></svg>`;
 }
 

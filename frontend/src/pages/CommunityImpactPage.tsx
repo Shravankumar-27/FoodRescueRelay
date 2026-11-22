@@ -19,7 +19,7 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
     mutationFn: async () => {
       const response = await fetch(`${API_BASE}/impact/report/donor`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error("Could not download your report. Please try again.");
-      const url = URL.createObjectURL(await response.blob()); const a = document.createElement("a"); a.href = url; a.download = "rescuerelay-impact.csv"; a.click(); URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(await response.blob()); const a = document.createElement("a"); a.href = url; a.download = "food-rescue-relay-impact.csv"; a.click(); URL.revokeObjectURL(url);
     },
   });
   const content = <div className="space-y-5">
@@ -29,7 +29,7 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
       <h2 className="text-3xl font-extrabold">{personal ? "Your impact, meal by meal" : "More meals. Less waste."}</h2>
     </section>
     {summary.isError && <button className="view-toggle" onClick={() => void summary.refetch()}>Retry impact totals</button>}
-    <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <section data-tour="impact-summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <Metric label="Meals delivered" value={s?.total_meals_rescued ?? "—"} note="Receiver-confirmed servings"/>
       <Metric label="Food rescued" value={s ? s.food_kg_estimate + " kg" : "—"} note="Estimated weight"/>
       <Metric label="CO₂e avoided" value={s ? s.co2e_kg_estimate + " kg" : "—"} note="Estimated emissions"/>
@@ -79,5 +79,5 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
       <Link to="/pricing">How sponsors can help</Link>
     </div>
   </div>;
-  return user ? <AppShell title={personal ? "Your impact" : "Community impact"} nav={user.role === "DONOR" ? "donor" : user.role === "ADMIN" ? "admin" : "receiver"}>{content}</AppShell> : <main className="mx-auto max-w-6xl p-4 sm:p-8"><BackButton/><Link to="/home" className="mb-5 inline-block font-bold text-primary">RescueRelay</Link>{content}</main>;
+  return user ? <AppShell title={personal ? "Your impact" : "Community impact"} nav={user.role === "DONOR" ? "donor" : user.role === "ADMIN" ? "admin" : "receiver"}>{content}</AppShell> : <main className="mx-auto max-w-6xl p-4 sm:p-8"><BackButton/><Link to="/home" className="mb-5 inline-block font-bold text-primary">Food Rescue Relay</Link>{content}</main>;
 }

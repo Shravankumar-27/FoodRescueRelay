@@ -1,4 +1,4 @@
-﻿import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Button from "../components/ui/Button";
@@ -23,12 +23,12 @@ export default function EventImpactPage() {
   const report = useQuery({ queryKey: ["event-impact", token], queryFn: () => apiRequest<EventImpact>(`/event-impact/${token}`), retry: false });
   const d = report.data;
   return <main className="mx-auto max-w-3xl space-y-5 p-4 sm:p-8">
-    <Link to="/home" className="text-sm font-bold text-primary">RescueRelay</Link>
+    <Link to="/home" className="text-sm font-bold text-primary">Food Rescue Relay</Link>
     {report.isPending && <p role="status">Loading event impact…</p>}
     {report.isError && <Card>This event report is unavailable.</Card>}
     {d && <>
       <Card className="recognition-print space-y-4">
-        <p className="text-sm text-muted">RescueRelay · {d.data_notice}</p>
+        <p className="text-sm text-muted">Food Rescue Relay · {d.data_notice}</p>
         <h1 className="text-3xl font-extrabold text-primary">Your event fed {d.meals} {d.meals === 1 ? "meal" : "meals"}</h1>
         <dl className="grid gap-3 sm:grid-cols-2">
           <div><dt>Estimated food weight</dt><dd className="text-xl font-bold">{d.estimated_kg} kg</dd></div>

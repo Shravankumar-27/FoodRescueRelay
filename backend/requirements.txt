@@ -9,5 +9,3 @@ pyjwt
 bcrypt
 cryptography
 email-validator
-pytest
-httpx

@@ -19,11 +19,11 @@ describe("whole-serving allocation",()=>{
 });
 describe("link-free recognition",()=>{
   it("has decorative artwork but no printed URL or QR code",()=>{
-    const svg=storyPoster({name:'Kitchen <one>',title:"Care creates change.",eyebrow:"CONTRIBUTION",amount:"1,320",unit:"COINS",secondary:"132 meals",secondaryNote:"Confirmed",third:"52.8 kg",thirdNote:"Estimated",quote:"Visit https://example.test/donate for details",issuer:"RescueRelay",footer:"2026",badge:"CARE",theme:"garden",disclaimer:"Demo"});
+    const svg=storyPoster({name:'Kitchen <one>',title:"Care creates change.",eyebrow:"CONTRIBUTION",amount:"1,320",unit:"COINS",secondary:"132 meals",secondaryNote:"Confirmed",third:"52.8 kg",thirdNote:"Estimated",quote:"Visit https://example.test/donate for details",issuer:"Food Rescue Relay",footer:"2026",badge:"CARE",theme:"garden",disclaimer:"Demo"});
     expect(svg).toContain("Kitchen &lt;one&gt;");expect(svg).toContain("<path");expect(svg).not.toContain("example.test");expect(svg).not.toContain("<image");expect(svg).not.toContain("<a ");
   });
   it("credits the receiver without implying a donor endorsement",()=>{
-    const record={donor_name:"Donor",receiver_name:"Receiver",message:"Donor appreciation",delivered_servings:10,people_served:null,food_rating:null,display_id:"RR-1",issued_at:"2026-11-22",public_token:"secret"} as DonationRecognition;
+    const record={donor_name:"Donor",receiver_name:"Receiver",message:"Donor appreciation",delivered_servings:10,people_served:null,food_rating:null,display_id:"FRR-1",issued_at:"2026-11-22",public_token:"secret"} as DonationRecognition;
     const svg=recognitionPosterSvg(record,"garden","https://example.test","receiver");
     expect(svg).toContain("RECEIVER CONTRIBUTION RECORD");expect(svg).toContain("Food contributed by Donor");expect(svg).not.toContain("secret");expect(svg).not.toContain("example.test");
   });

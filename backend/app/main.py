@@ -24,7 +24,7 @@ def _request_id(request: Request) -> str:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="RescueRelay API", version="0.1.0")
+    app = FastAPI(title="Food Rescue Relay API", version="0.1.0")
 
     app.add_middleware(
         CORSMiddleware,

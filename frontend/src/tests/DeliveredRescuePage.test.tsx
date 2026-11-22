@@ -43,7 +43,7 @@ describe("delivered rescue details", () => {
     vi.mocked(apiRequest)
       .mockResolvedValueOnce({
         status: "DELIVERED",
-        display_id: "RR-12345678",
+        display_id: "FRR-12345678",
         food_items: [],
         total_servings: 24,
         pickup_by: "2026-01-01T12:00:00Z",

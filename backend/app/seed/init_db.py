@@ -33,7 +33,7 @@ from app.services.rescue_service import derive_dietary_type
 DEMO_PASSWORD = "demo123"
 
 # Marker for the demo rescue: a fixed display id and a fixed idempotency key.
-DEMO_RESCUE_DISPLAY_ID = "RR-10000001"
+DEMO_RESCUE_DISPLAY_ID = "FRR-10000001"
 DEMO_RESCUE_IDEMPOTENCY_KEY = "demo-seed-madhapur-v1"
 DEMO_RESCUE_DONOR = "Madhapur Grand Events"
 
@@ -80,7 +80,7 @@ _ORGANIZATIONS = [
         None,
     ),
     (
-        "RescueRelay Admin",
+        "Food Rescue Relay Admin",
         OrganizationType.ADMIN.value,
         "Hyderabad",
         17.385,
@@ -112,7 +112,7 @@ _USERS = [
     ("hope@rescuerelay.demo", "Hope Community Kitchen", UserRole.RECEIVER.value, "Kavya Sharma"),
     ("shelter@rescuerelay.demo", "ShelterServe", UserRole.RECEIVER.value, "Anjali Rao"),
     ("cityfood@rescuerelay.demo", "City Food Relief", UserRole.RECEIVER.value, "Nikhil Varma"),
-    ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Aditi Mehta"),
+    ("admin@rescuerelay.demo", "Food Rescue Relay Admin", UserRole.ADMIN.value, "Aditi Mehta"),
 ]
 
 
@@ -266,7 +266,9 @@ def seed_demo(session) -> None:
     for rescue in session.scalars(select(Rescue)):
         if rescue.handling_notes and rescue.handling_notes.startswith("Synthetic QA listing."):
             rescue.handling_notes = rescue.handling_notes.removeprefix("Synthetic QA listing.").strip() or None
-        if not rescue.display_id.removeprefix("RR-").isdigit():
+        if rescue.display_id.startswith("RR-") and rescue.display_id[3:].isdigit():
+            rescue.display_id = f"FRR-{rescue.display_id[3:]}"
+        elif not rescue.display_id.removeprefix("FRR-").isdigit():
             candidate = new_display_id()
             while candidate in used:
                 candidate = new_display_id()
@@ -276,8 +278,8 @@ def seed_demo(session) -> None:
         select(PartnerMessage, Rescue).join(AllocationNotice, AllocationNotice.message_id == PartnerMessage.id)
         .join(Rescue, Rescue.id == AllocationNotice.rescue_id)
     ):
-        if message.message.startswith(("Split proposal for RR-", "Updated split proposal for RR-")):
-            message.message = re.sub(r"\bRR-[A-Z0-9]+\b", rescue.display_id, message.message, count=1)
+        if message.message.startswith(("Split proposal for RR-", "Updated split proposal for RR-", "Split proposal for FRR-", "Updated split proposal for FRR-")):
+            message.message = re.sub(r"\b(?:RR|FRR)-[A-Z0-9]+\b", rescue.display_id, message.message, count=1)
     from app.services.trust_service import compute_trust_scores
     compute_trust_scores(session)
 

@@ -1,4 +1,4 @@
-"""Shared string enums for RescueRelay models.
+"""Shared string enums for Food Rescue Relay models.
 
 Values are stored in the database as plain strings (``enum.value``), so the
 check constraints in the models mirror these members exactly.

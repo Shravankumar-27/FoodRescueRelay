@@ -73,7 +73,7 @@ _RECEIVER_ORGS = [
     ("Medchal Food Drive",       OrganizationType.NGO.value,               "Medchal, Hyderabad",       17.5929, 78.5121, 0.79, 110, NeedLevel.MEDIUM.value, True,  True, True),
 ]
 
-_ADMIN_ORG = ("RescueRelay Admin", "Hyderabad", 17.385, 78.4867)
+_ADMIN_ORG = ("Food Rescue Relay Admin", "Hyderabad", 17.385, 78.4867)
 
 # (email, org_name, role, display_name)
 _DONOR_USERS = [
@@ -95,7 +95,7 @@ _RECEIVER_USERS = [
     ("roti@rescuerelay.demo",       "Roti Bank Hyderabad",      UserRole.RECEIVER.value, "Vinod Mehta"),
 ]
 
-_ADMIN_USER = ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Aditi Mehta")
+_ADMIN_USER = ("admin@rescuerelay.demo", "Food Rescue Relay Admin", UserRole.ADMIN.value, "Aditi Mehta")
 
 # Food templates (name, dietary, allergens)
 _FOOD_TEMPLATES = [
@@ -209,7 +209,7 @@ def _make_historical_rescue(
     now = datetime.now(timezone.utc)
     created_at = now - timedelta(days=days_ago)
     pickup_by = created_at + timedelta(hours=rng.randint(1, 3))
-    display_id = f"RR-{rng.randint(10000, 99999):05d}"
+    display_id = f"FRR-{rng.randint(10000, 99999):05d}"
 
     food_items = [_make_food_item(food_name, dietary, allergens, qty, created_at)]
     rescue = Rescue(

@@ -3,7 +3,7 @@ import { localDateTime, parseSurplus } from "../../lib/smartPaste";
 import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
 import HandlingIcon from "../../components/ui/HandlingIcon";
 import AppShell from "../../components/layout/AppShell";
@@ -232,6 +232,8 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
 export default function CreateRescuePage() {
   const { token, organization } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tourStep = searchParams.get("tourStep");
   const { toast, error: toastError } = useToast();
 
   const idemRef = useRef<string>("");
@@ -240,6 +242,10 @@ export default function CreateRescuePage() {
 
   const [draft] = useState<Partial<Draft> | null>(() => sessionStorage.getItem(REPEAT_KEY) ? null : readDraft());
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  useEffect(() => {
+    const requested = Number(tourStep);
+    if (requested === 1 || requested === 2 || requested === 3) setStep(requested);
+  }, [tourStep]);
   const [draftSaved, setDraftSaved] = useState(false);
 
   const [rows, setRows] = useState<FoodRow[]>(
@@ -404,7 +410,7 @@ export default function CreateRescuePage() {
 
   function nextFromHandling() {
     const errs: Record<string, string> = {};
-    if (untouched !== "yes") errs.untouched = "RescueRelay can only redistribute untouched food.";
+    if (untouched !== "yes") errs.untouched = "Food Rescue Relay can only redistribute untouched food.";
     if (!holding) errs.holding = "Choose how the food was held.";
     setHandErrs(errs);
     if (Object.keys(errs).length === 0) setStep(3);
@@ -433,7 +439,7 @@ export default function CreateRescuePage() {
 
         {/* ── STEP 1: Food ── */}
         {step === 1 && (
-          <section className="flex flex-col gap-6" aria-label="Food items">
+          <section data-tour="donation-form" className={`flex flex-col gap-6 ${tourStep ? "tour-page-enter" : ""}`} aria-label="Food items">
             <div className="space-y-2 rounded-2xl border border-border bg-surface p-4">
               <label htmlFor="smart-paste" className="text-sm font-semibold">Smart paste</label>
               <textarea id="smart-paste" maxLength={250} value={paste} onChange={e => setPaste(e.target.value)} placeholder="200 plates veg biryani, cooked 9pm, pickup by 11:30" className="w-full rounded-xl border border-border p-3"/>
@@ -596,7 +602,7 @@ export default function CreateRescuePage() {
 
         {/* ── STEP 2: Handling ── */}
         {step === 2 && (
-          <section className="flex flex-col gap-6" aria-label="Handling">
+          <section data-tour="donation-handling" className={`flex flex-col gap-6 ${tourStep ? "tour-page-enter" : ""}`} aria-label="Handling">
             <div>
               <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-surface p-4 text-sm font-semibold">
                 <input type="checkbox" checked={untouched === "yes"} onChange={event => {
@@ -666,7 +672,7 @@ export default function CreateRescuePage() {
 
         {/* ── STEP 3: Deadline ── */}
         {step === 3 && (
-          <section className="flex flex-col gap-6" aria-label="Pickup deadline">
+          <section data-tour="donation-deadline" className={`flex flex-col gap-6 ${tourStep ? "tour-page-enter" : ""}`} aria-label="Pickup deadline">
             <Input
               label="Prepared at"
               name="prepared_at"
@@ -825,6 +831,7 @@ export default function CreateRescuePage() {
             <Button
               type="submit"
               variant="primary"
+              data-tour="donation-submit"
               className="min-h-[44px] flex items-center gap-2"
               disabled={create.isPending}
             >

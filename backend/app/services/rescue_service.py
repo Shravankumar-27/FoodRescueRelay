@@ -72,7 +72,7 @@ def _validate(payload: RescueCreate, now: datetime, prepared_at: datetime, picku
         raise AppError(
             "FOOD_NOT_ELIGIBLE",
             "This listing cannot be posted because the surplus was served to guests or "
-            "mixed with waste. RescueRelay only redistributes untouched food.",
+            "mixed with waste. Food Rescue Relay only redistributes untouched food.",
             422,
         )
     if not payload.safety_attestation:

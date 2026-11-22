@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 
 from app.api.responses import ok
+from app.core.errors import AppError
 from app.db.session import SessionLocal
 
 router = APIRouter()
@@ -25,5 +26,6 @@ def health(request: Request) -> dict[str, Any]:
     except Exception:
         database = "unavailable"
 
-    status = "ok" if database == "ok" else "degraded"
-    return ok({"status": status, "database": database}, request_id)
+    if database != "ok":
+        raise AppError("DATABASE_UNAVAILABLE", "Database connectivity check failed.", 503)
+    return ok({"status": "ok", "database": database}, request_id)

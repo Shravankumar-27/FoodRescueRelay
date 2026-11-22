@@ -1,4 +1,4 @@
-"""Appreciation issued by receiving organizations or RescueRelay administrators.
+"""Appreciation issued by receiving organizations or Food Rescue Relay administrators.
 
 The public response is an allowlist: no addresses, contacts, user identities,
 pickup codes or beneficiary details. Revoked acknowledgements cannot be verified.
@@ -57,7 +57,7 @@ def _serialize(db, row, rescue=None, impact=None):
         "people_served": row.people_served, "food_rating": row.food_rating, "message": row.message,
         "status": "WITHDRAWN" if row.withdrawn_at else "ISSUED", "demo": True,
         "issuer_role": "ADMIN" if platform_issued else "RECEIVER",
-        "disclaimer": ("RescueRelay-issued" if platform_issued else "Receiver-issued")
+        "disclaimer": ("Food Rescue Relay-issued" if platform_issued else "Receiver-issued")
         + " acknowledgement of a confirmed donation. Synthetic demo data. Appreciation only. Not a food-safety certification.",
     }
 

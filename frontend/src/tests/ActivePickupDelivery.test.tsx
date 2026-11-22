@@ -17,7 +17,7 @@ vi.mock("../components/rescue/MealFeedback", () => ({ default: () => null }));
 vi.mock("../components/chat/ChatBox", () => ({ default: () => null }));
 
 const collected = {
-  id: "test-rescue", display_id: "RR-TEST", status: "COLLECTED", donor_organization_name: "Demo Donor",
+  id: "test-rescue", display_id: "FRR-TEST", status: "COLLECTED", donor_organization_name: "Demo Donor",
   food_items: [], collected_servings: 20, total_servings: 20, handling_type: "HOT_HELD", prepared_at: "2026-11-22T08:00:00Z",
   status_events: [{ to_status: "COLLECTED", created_at: "2026-11-22T08:13:00Z" }],
 };

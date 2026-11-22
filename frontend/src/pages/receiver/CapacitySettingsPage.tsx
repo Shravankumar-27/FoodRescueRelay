@@ -179,7 +179,7 @@ export default function CapacitySettingsPage() {
           </p>
         ) : form ? (
           <Card>
-            <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+            <form data-tour="receiver-capacity" onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
               <fieldset className="rounded-xl border border-border p-4">
                 <legend className="px-2 font-bold text-ink">Availability and capacity</legend>
                 <p className="mb-3 text-sm text-muted">Set your total limit and how many more servings you can receive now.</p>

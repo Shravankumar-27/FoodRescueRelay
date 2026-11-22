@@ -84,7 +84,7 @@ async function request<T>(path: string, opts: RequestOptions): Promise<T> {
   } catch (error) {
     if (opts.signal?.aborted) throw error;
     if (timedOut) throw new ApiError("TIMEOUT", "The API took too long to respond. Please retry. For a submitted change, check its status first.", 0);
-    throw new ApiError("OFFLINE", "Could not reach the RescueRelay API. Check the connection and try again.", 0);
+    throw new ApiError("OFFLINE", "Could not reach the Food Rescue Relay API. Check the connection and try again.", 0);
   } finally {
     clearTimeout(timeout);
     opts.signal?.removeEventListener("abort", abort);
@@ -94,7 +94,7 @@ async function request<T>(path: string, opts: RequestOptions): Promise<T> {
   if (!res.ok || envelope?.success !== true) {
     throw new ApiError(
       envelope?.error?.code ?? "HTTP_ERROR",
-      envelope?.error?.message ?? "The RescueRelay API returned an unexpected response. Try again.",
+      envelope?.error?.message ?? "The Food Rescue Relay API returned an unexpected response. Try again.",
       res.status,
       envelope?.error?.details,
     );

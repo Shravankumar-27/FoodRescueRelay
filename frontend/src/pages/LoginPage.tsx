@@ -1,10 +1,10 @@
-import BackButton from "../components/ui/BackButton";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Utensils, LogIn, Eye, EyeOff, CheckCircle2, HeartHandshake } from "lucide-react";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../features/auth/AuthContext";
+import AuthLayout from "../features/auth/AuthLayout";
 import { useToast } from "../features/toast/ToastContext";
 import { ApiError } from "../lib/api";
 
@@ -38,7 +38,7 @@ const DEMO_ACCOUNTS: { email: string; label: string; role: string; color: string
   {
     email: "admin@rescuerelay.demo",
     label: "Admin",
-    role: "RescueRelay Admin",
+    role: "Food Rescue Relay Admin",
     color: "border-muted/40 hover:border-muted hover:bg-background",
   },
 ];
@@ -81,21 +81,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-green-50 via-white to-green-50">
-      {/* Header */}
-      <header className="border-b border-border bg-surface/80 px-4 py-3 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-primary">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-sm font-black">
-              R
-            </span>
-            RescueRelay
-          </Link>
-          <BackButton fallback="/home"/>
-        </div>
-      </header>
-
-      <div className="mx-auto grid w-full max-w-6xl flex-1 content-center gap-5 px-4 py-8 md:grid-cols-2 md:gap-0 md:px-8">
+    <AuthLayout>
         <section className="rounded-3xl border border-border bg-surface p-6 shadow-card md:rounded-r-none md:p-10 lg:p-12">
           <div className="mb-6">
             <div className="mb-4 flex">
@@ -105,7 +91,7 @@ export default function LoginPage() {
             </div>
             <p className="eyebrow mb-3 text-primary">Welcome to the community</p>
             <h1 className="text-3xl font-bold tracking-tight text-ink">Good food.<br/>A fresh start.</h1>
-            <p className="mt-3 text-sm leading-relaxed text-muted">Sign in to RescueRelay to share surplus, coordinate a pickup, or see the difference you make.</p>
+            <p className="mt-3 text-sm leading-relaxed text-muted">Sign in to Food Rescue Relay to share surplus, coordinate a pickup, or see the difference you make.</p>
           </div>
 
           {/* Login form */}
@@ -148,6 +134,9 @@ export default function LoginPage() {
               {submitting ? "Signing in…" : "Sign in"}
             </Button>
           </form>
+          <p className="mt-5 text-sm text-muted">
+            New to Food Rescue Relay? <Link to="/signup" className="font-semibold text-primary underline underline-offset-4">Create an account</Link>
+          </p>
         </section>
         <section className="harvest-hero rounded-3xl p-6 md:rounded-l-none md:p-10 lg:p-12" aria-labelledby="quick-access">
           <HeartHandshake className="mb-5 h-9 w-9 text-amber-200" aria-hidden="true"/>
@@ -172,7 +161,6 @@ export default function LoginPage() {
           </div>
         </section>
 
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

@@ -8,6 +8,7 @@ import {
   TrendingUp,
   ArrowRight,
   Leaf,
+  Github,
 } from "lucide-react";
 import { apiRequest } from "../lib/api";
 import type { ImpactSummary } from "../types/api";
@@ -78,17 +79,26 @@ export default function LandingPage() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-sm font-black">
               R
             </span>
-            RescueRelay
+            <span className="flex flex-col leading-tight">
+              <span>Food Rescue Relay</span>
+              <span className="hidden text-[10px] font-medium tracking-wide text-muted sm:block">Rescue good food. Relay it to your community.</span>
+            </span>
           </Link>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-successLight px-2.5 py-0.5 text-xs font-semibold text-success">
-              <MapPin className="mr-1 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Hyderabad
+            <span className="hidden rounded-full bg-successLight px-2.5 py-0.5 text-xs font-semibold text-success sm:inline">
+              <MapPin className="mr-1 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />Hyderabad
             </span>
             <Link
               to="/login"
-              className="inline-flex min-h-[40px] items-center rounded-button bg-primary px-4 text-sm font-semibold text-white hover:bg-primaryDark"
+              className="inline-flex min-h-[40px] items-center text-sm font-semibold text-primary hover:underline"
             >
               Sign in
+            </Link>
+            <Link
+              to="/signup"
+              className="inline-flex min-h-[40px] items-center rounded-button bg-primary px-4 text-sm font-semibold text-white hover:bg-primaryDark"
+            >
+              Sign up
             </Link>
           </div>
         </div>
@@ -100,9 +110,12 @@ export default function LandingPage() {
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">
             Surplus food has a deadline.
             <br />
-            <span className="text-green-300">RescueRelay beats it.</span>
+            <span className="text-green-300">Good food deserves a second table.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-green-100">
+          <p className="mx-auto mt-4 max-w-2xl text-sm font-semibold tracking-wide text-green-200">
+            Rescue good food. Relay it to your community.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-lg text-green-100">
             We connect caterers and event venues to community kitchens and NGOs in Hyderabad —
             turning food waste into meals, in under 30 minutes.
           </p>
@@ -150,7 +163,7 @@ export default function LandingPage() {
       <section className="px-4 py-16">
         <div className="mx-auto max-w-5xl">
           <div className="mb-10 text-center">
-            <h2 className="text-3xl font-bold text-ink">How RescueRelay works</h2>
+            <h2 className="text-3xl font-bold text-ink">How Food Rescue Relay works</h2>
             <p className="mt-2 text-muted">Three steps. Under 30 minutes. Zero food wasted.</p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -217,8 +230,17 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-surface px-4 py-6 text-center text-xs text-muted">
-        RescueRelay · Hyderabad
+        Food Rescue Relay · Hyderabad
         <p className="mt-2">Synthetic demo data</p>
+        <a
+          href="https://github.com/Shravankumar-27/FoodRescueRelay"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex min-h-10 items-center gap-2 font-semibold text-primary hover:underline"
+        >
+          <Github size={15} aria-hidden="true" />
+          View project source on GitHub
+        </a>
       </footer>
     </div>
   );

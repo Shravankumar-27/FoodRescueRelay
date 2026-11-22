@@ -364,7 +364,7 @@ export default function ReceiverHomePage() {
 
         {/* Offers section */}
         {viewMode === "list" && (
-          <section aria-labelledby="offers-heading" className="flex flex-col gap-3">
+          <section data-tour="available-food" aria-labelledby="offers-heading" className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 id="offers-heading" className="text-lg font-semibold text-ink">
                 Offers

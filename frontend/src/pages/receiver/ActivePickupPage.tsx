@@ -137,7 +137,7 @@ export default function ActivePickupPage() {
         </Card>}
         {claimed && <PickupLogistics rescueId={rescueId} side="receiver"/>}
         <div className="grid items-start gap-4 lg:grid-cols-2">
-          {claimed && <Card>
+          {claimed && <Card id="tour-receiver-pickup">
             <h3 className="text-lg font-bold">Confirm collection</h3>
             <p className="mt-1 text-sm">{d.private_address || d.locality} · by {formatDateTime(d.pickup_by)}</p>
             <form onSubmit={collect} noValidate className="mt-4 space-y-3">
@@ -166,7 +166,7 @@ export default function ActivePickupPage() {
             </form>}
           </Card>}
 
-          {collectedStatus && <Card>
+          {collectedStatus && <Card id="tour-receiver-delivery">
             <h3 className="text-lg font-bold">Record delivery</h3>
             <p className="mt-1 text-sm text-muted">{d.collected_servings} servings collected</p>
             <form onSubmit={deliver} noValidate className="mt-4 space-y-3">
@@ -182,7 +182,7 @@ export default function ActivePickupPage() {
           </Card>}
 
           {isDelivered && <div className="flex flex-col gap-4">
-          <Card variant="fresh">
+          <Card id="tour-receiver-delivered" variant="fresh">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">Delivery confirmed</p>
             <h3 className="mt-1 text-2xl font-bold">{deliveredMeals.toLocaleString("en-IN")} meals delivered</h3>
             {!!d.impact?.rejected_servings && <p className="mt-1 text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}

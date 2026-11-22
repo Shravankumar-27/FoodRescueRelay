@@ -5,6 +5,7 @@ import type { Contribution } from "../../types/contribution";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import BackButton from "../ui/BackButton";
+import TourGuide from "./TourGuide";
 import {
   Home,
   MessageCircle,
@@ -79,6 +80,10 @@ export default function AppShell({
   const navigate = useNavigate();
   const location = useLocation();
   const home = `/${nav}`;
+  const tourRunning = user ? (() => {
+    try { return JSON.parse(localStorage.getItem(`rr.tour.${user.id}`) ?? "null")?.active === true; }
+    catch { return false; }
+  })() : false;
   const contribution = useQuery({queryKey:["contribution",user?.id],queryFn:()=>apiRequest<Contribution>("/contribution",{token}),enabled:!!token&&user?.role==="DONOR",refetchInterval:15000});
   const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => apiRequest<InboxItem[]>("/partners/inbox", { token }), enabled: !!token && user?.role !== "ADMIN", refetchInterval: 10000 });
   const unread = (inbox.data ?? []).reduce((sum, item) => sum + item.unread, 0);
@@ -173,7 +178,7 @@ export default function AppShell({
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white text-sm font-black">
               R
             </span>
-            <span className="hidden sm:inline">RescueRelay</span>
+            <span className="hidden sm:inline">Food Rescue Relay</span>
           </Link>
 
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -188,6 +193,8 @@ export default function AppShell({
               {roleBadge.icon}
               {roleBadge.label}
             </span>
+
+            {user && <TourGuide role={user.role} userId={user.id} />}
 
             {!online && (
               <span
@@ -236,17 +243,9 @@ export default function AppShell({
       {/* Main layout: sidebar on desktop, full-width on mobile */}
       <div className="mx-auto flex w-full max-w-[1440px] flex-1 gap-6 px-4 py-4 md:pb-6">
         {desktopSidebar}
-        <main id="main-content" className="min-w-0 flex-1">{children}</main>
+        <main key={location.pathname} id="main-content" className={`min-w-0 flex-1 ${tourRunning ? "tour-page-enter" : ""}`}>{children}</main>
       </div>
       <div className="fixed inset-x-0 bottom-0 z-30">
-      <footer className="border-t border-border bg-surface/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm">
-          <span className="font-semibold text-ink">RescueRelay <span className="hidden font-normal text-muted sm:inline">· Good food, shared locally.</span></span>
-          <span className="text-xs text-muted">Synthetic demo data · Not a food-safety certification.</span>
-          <Link className="font-semibold text-primary hover:underline" to="/community/impact">Community impact</Link>
-        </div>
-      </footer>
-
       {/* Mobile bottom nav */}
       {bottomNav}
       </div>

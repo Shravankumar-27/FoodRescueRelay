@@ -117,7 +117,7 @@ export default function ActiveRescuePage() {
           </dl>
         </Card>
 
-        <Card>
+        <Card id="tour-rescue-timeline">
           <h3 className="mb-4 flex items-center gap-2 text-base font-semibold"><Route size={18} className="text-primary"/>Rescue timeline</h3>
           {d.consume_by && <p className="mb-3 text-sm">Consume by {formatDateTime(d.consume_by)}. {d.urgent && "Urgent."}</p>}
           <p className="mb-3 text-sm text-muted">Not a food-safety certification.</p>
@@ -177,7 +177,7 @@ export default function ActiveRescuePage() {
             </div>
           </AllocationPuzzle> : status === "DELIVERED" ? <Card className="min-w-0">
             {d.impact?.delivered_servings != null ? <DeliveryImpact meals={d.impact.delivered_servings}/> : <h3 className="font-semibold">Delivery impact unavailable</h3>}
-          </Card> : <Card className="min-w-0">
+          </Card> : <Card id="tour-pickup-code" className="min-w-0">
             <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Handshake size={18} className="text-primary"/>Pickup</h3>
             {d.claimed_receiver && <div className="rounded-xl bg-background p-3">
               <p className="text-xs text-muted">Receiver</p>

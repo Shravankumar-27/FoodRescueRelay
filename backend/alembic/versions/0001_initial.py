@@ -1,4 +1,4 @@
-"""initial schema: all RescueRelay tables
+"""initial schema: all Food Rescue Relay tables
 
 Revision ID: 0001
 Revises: 

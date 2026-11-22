@@ -22,5 +22,5 @@ def seconds_remaining(pickup_by: datetime, now: datetime) -> int:
 
 
 def new_display_id() -> str:
-    """Return a readable rescue code such as ``RR-12345678``."""
-    return f"RR-{10_000_000 + secrets.randbelow(90_000_000)}"
+    """Return a readable rescue code such as ``FRR-12345678``."""
+    return f"FRR-{10_000_000 + secrets.randbelow(90_000_000)}"

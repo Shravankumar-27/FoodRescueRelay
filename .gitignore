@@ -24,7 +24,6 @@ frontend/dist/
 .DS_Store
 .vscode/
 .idea/
-.codebenders/
 coverage/
 playwright-report/
 test-results/

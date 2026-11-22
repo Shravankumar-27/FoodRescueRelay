@@ -13,11 +13,11 @@ def test_seed_upgrades_labels_without_breaking_rescue_links(db_session):
     from app.seed.init_db import seed_demo
     rescue = db_session.scalar(select(Rescue))
     rescue_id = rescue.id
-    rescue.display_id = "RR-U7QFRM"
+    rescue.display_id = "FRR-U7QFRM"
     rescue.handling_notes = "Synthetic QA listing. Keep refrigerated."
     receiver = db_session.scalar(select(Organization).where(Organization.name == "Hope Community Kitchen"))
     message = PartnerMessage(sender_org_id=rescue.donor_organization_id, recipient_org_id=receiver.id,
-                             message="Split proposal for RR-U7QFRM · 10 servings")
+                             message="Split proposal for FRR-U7QFRM · 10 servings")
     db_session.add(message)
     db_session.flush()
     db_session.add(AllocationNotice(message_id=message.id, rescue_id=rescue.id, items=[]))
@@ -25,7 +25,7 @@ def test_seed_upgrades_labels_without_breaking_rescue_links(db_session):
     seed_demo(db_session)
     db_session.flush()
     assert rescue.id == rescue_id
-    assert rescue.display_id.removeprefix("RR-").isdigit()
+    assert rescue.display_id.removeprefix("FRR-").isdigit()
     assert rescue.handling_notes == "Keep refrigerated."
     assert message.message == f"Split proposal for {rescue.display_id} · 10 servings"
     upgraded = rescue.display_id

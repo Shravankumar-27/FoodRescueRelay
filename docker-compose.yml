@@ -1,4 +1,4 @@
-# RescueRelay: optional PostgreSQL + backend + frontend stack.
+# Food Rescue Relay: optional PostgreSQL + backend + frontend stack.
 # Run with: docker compose up --build
 # Without Docker, the app defaults to local SQLite (see backend/.env.example).
 
@@ -27,6 +27,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the environment or a .env file at the repo root}
       CORS_ORIGINS: http://localhost:5173
       DEMO_MODE: "true"
+      PORT: "8000"
     ports:
       - "8000:8000"
     depends_on:

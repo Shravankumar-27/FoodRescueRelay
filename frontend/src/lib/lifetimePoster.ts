@@ -41,7 +41,7 @@ export function lifetimePosterSvg(data: Contribution, theme: PosterTheme) {
     <rect x="28" y="28" width="1024" height="1294" rx="25" fill="none" stroke="${gold}" opacity=".65"/>
     <rect x="39" y="39" width="1002" height="1272" rx="18" fill="none" stroke="${gold}" opacity=".22"/>
     <g font-family="Arial, Helvetica, sans-serif">
-      ${text("RescueRelay",72,98,27,ink,800,"start")}
+      ${text("Food Rescue Relay",72,98,27,ink,800,"start")}
       ${text("THE COMMUNITY TABLE",1008,96,16,gold,700,"end")}
       ${text("OVERALL APPRECIATION",72,177,18,gold,700,"start")}
       <g font-family="Georgia, serif">
@@ -69,7 +69,7 @@ export function lifetimePosterSvg(data: Contribution, theme: PosterTheme) {
         ${text(receiver ? "A place at the table begins with those who welcome." : "Every shared meal is a small act of lasting kindness.",540,1090,25)}
         ${text(receiver ? "Thank you for receiving with care, again and again." : "Thank you for choosing community, again and again.",540,1126,25)}
       </g>
-      ${text("Issued by RescueRelay · Lifetime platform contribution record",540,1194,18,ink,700)}
+      ${text("Issued by Food Rescue Relay · Lifetime platform contribution record",540,1194,18,ink,700)}
       ${text(`As of ${new Date(data.generated_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC · Meal servings, not unique people`,540,1226,16,muted)}
       ${text("Estimates: meals × 0.4 kg food; food kg × 2.5 kg CO₂e. Not measured emissions.",540,1261,15,muted)}
       ${text("Synthetic demo data. Appreciation only. Not a food-safety certification.",540,1287,15,muted)}

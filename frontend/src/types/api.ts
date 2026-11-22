@@ -29,6 +29,16 @@ export interface LoginData {
   organization: OrganizationOut;
 }
 
+export interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+  organization_name: string;
+  organization_type: "CATERER" | "NGO" | "COMMUNITY_KITCHEN" | "SHELTER";
+  locality: string;
+  street_address: string;
+}
+
 export interface MeData {
   user: UserOut;
   organization: OrganizationOut;

@@ -8,6 +8,7 @@ import Skeleton from "../components/ui/Skeleton";
 import RequireRole from "./RequireRole";
 const LandingPage = lazy(() => import("../pages/LandingPage"));
 const LoginPage = lazy(() => import("../pages/LoginPage"));
+const SignupPage = lazy(() => import("../pages/SignupPage"));
 const DonorHomePage = lazy(() => import("../pages/donor/DonorHomePage"));
 const CreateRescuePage = lazy(() => import("../pages/donor/CreateRescuePage"));
 const ActiveRescuePage = lazy(() => import("../pages/donor/ActiveRescuePage"));
@@ -41,7 +42,7 @@ function RoleHome() {
     );
   }
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/home" replace />;
   }
   if (user.role === "DONOR") {
     return <Navigate to="/donor" replace />;
@@ -86,6 +87,7 @@ export default function App() {
               {/* Public routes */}
               <Route path="/home" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               <Route path="/" element={<RoleHome />} />
 
               {/* Donor routes */}
