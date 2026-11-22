@@ -117,7 +117,7 @@ def list_my_rescues(
     donor: User = Depends(require_roles(UserRole.DONOR)),
 ) -> dict[str, Any]:
     now = utcnow()
-    advance_expired_offers(db, now)
+    advance_expired_offers(db, now, donor_org_id=donor.organization_id)
     db.commit()
     rescues = list(
         db.scalars(
@@ -159,7 +159,7 @@ def get_rescue(
     user: User = Depends(require_roles(UserRole.DONOR, UserRole.RECEIVER, UserRole.ADMIN)),
 ) -> dict[str, Any]:
     now = utcnow()
-    advance_expired_offers(db, now)
+    advance_expired_offers(db, now, rescue_id=rescue_id)
     db.commit()
     rescue = _load_visible(db, rescue_id, user)
     return ok(rescue_detail(db, rescue, user, now), _request_id(request))

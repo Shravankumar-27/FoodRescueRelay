@@ -1,7 +1,8 @@
+import BackButton from "../components/ui/BackButton";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Leaf, Download } from "lucide-react";
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
 import AppShell from "../components/layout/AppShell";
 import Card from "../components/ui/Card";
 import ContributionDetails from "../components/impact/ContributionDetails";
@@ -40,12 +41,14 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
         <p className="mb-3 text-sm text-muted">Last eight weeks · UTC</p>
         <div className="h-64 min-w-0 rounded-xl bg-background/70 py-3 pr-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={s?.weekly ?? []} accessibilityLayer>
+            <BarChart data={s?.weekly ?? []} accessibilityLayer margin={{ top: 24, right: 8, bottom: 4, left: 0 }}>
               <CartesianGrid vertical={false} stroke="#dedbd4" strokeDasharray="4 4"/>
-              <XAxis dataKey="week" tick={{ fontSize: 11 }} minTickGap={14} tickMargin={8} axisLine={false} tickLine={false}/>
-              <YAxis allowDecimals={false} width={40} tick={{ fontSize: 11 }} axisLine={false} tickLine={false}/>
-              <Tooltip cursor={{ fill: "#e1eee5" }}/>
-              <Bar dataKey="meals" fill="#2d6a4f" maxBarSize={52} radius={[6, 6, 0, 0]} name="Meals delivered"/>
+              <XAxis dataKey="week" tick={{ fontSize: 12 }} minTickGap={18} tickMargin={8} axisLine={false} tickLine={false}/>
+              <YAxis allowDecimals={false} width={44} tick={{ fontSize: 12 }} axisLine={false} tickLine={false}/>
+              <Tooltip cursor={{ fill: "#e1eee5" }} contentStyle={{ borderRadius: 12, borderColor: "#dcded4", fontSize: 14 }}/>
+              <Bar dataKey="meals" fill="#2d6a4f" maxBarSize={48} radius={[6, 6, 0, 0]} name="Meals delivered">
+                <LabelList dataKey="meals" position="top" fontSize={12} fill="#2d6a4f" formatter={(value: unknown) => Number(value) > 0 ? String(value) : ""}/>
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -53,6 +56,7 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
       </Card>
       <Card variant="accent">
         <h3 className="text-lg font-bold">How estimates are calculated</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted">Every confirmed serving counts as one meal. We use the same simple factors across your impact report.</p>
         <dl className="my-3 divide-y divide-border">
           {[["Food weight", "0.4 kg per meal"], ["Emissions avoided", "2.5 kg CO₂e per kg of food"], ["Household meal equivalent", "4 meals"]].map(([label, value]) => (
             <div key={label} className="grid gap-1 py-2 text-sm sm:grid-cols-2">
@@ -74,5 +78,5 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
       <Link to="/pricing">How sponsors can help</Link>
     </div>
   </div>;
-  return user ? <AppShell title={personal ? "Your impact" : "Community impact"} nav={user.role === "DONOR" ? "donor" : user.role === "ADMIN" ? "admin" : "receiver"}>{content}</AppShell> : <main className="mx-auto max-w-6xl p-4 sm:p-8"><Link to="/home" className="mb-5 inline-block font-bold text-primary">RescueRelay</Link>{content}</main>;
+  return user ? <AppShell title={personal ? "Your impact" : "Community impact"} nav={user.role === "DONOR" ? "donor" : user.role === "ADMIN" ? "admin" : "receiver"}>{content}</AppShell> : <main className="mx-auto max-w-6xl p-4 sm:p-8"><BackButton/><Link to="/home" className="mb-5 inline-block font-bold text-primary">RescueRelay</Link>{content}</main>;
 }

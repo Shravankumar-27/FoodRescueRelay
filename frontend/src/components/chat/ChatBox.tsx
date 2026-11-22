@@ -32,26 +32,27 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
     refetchInterval: isOpen ? 3500 : 15000,
   });
 
-  const sendMutation = useMutation({
+  const sendMutation = useMutation({meta: { errorDisplay: "inline" }, 
     mutationFn: (msg: string) =>
       apiRequest<{ id: string; created_at: string }>(endpoint, {
         method: "POST",
         token,
         body: { message: msg },
       }),
-    onSuccess: () => {
-      setMessageText("");
+    onSuccess: (_data, sent) => {
+      setMessageText(current => current.trim() === sent ? "" : current);
       queryClient.invalidateQueries({ queryKey: ["inbox"] });
       queryClient.invalidateQueries({ queryKey: ["chat", partnerId ?? rescueId] });
     },
   });
 
+  const lastMessageId = chatQuery.data?.messages.slice(-1)[0]?.id;
   useEffect(() => {
     if (isOpen) {
       const log = logRef.current;
       if (log) log.scrollTop = log.scrollHeight;
     }
-  }, [chatQuery.data?.messages, isOpen]);
+  }, [lastMessageId, isOpen]);
 
   const messages = chatQuery.data?.messages ?? [];
   const suggested = chatQuery.data?.suggested ?? [
@@ -113,7 +114,7 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
                       <span>{timeAgo(m.created_at)}</span>
                     </div>
                     <div
-                      className={`rounded-2xl px-3.5 py-2 break-words text-sm font-medium leading-relaxed shadow-sm ${
+                      className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2 break-words text-sm font-medium leading-relaxed shadow-sm ${
                         isMe
                           ? "bg-primary text-white rounded-br-none"
                           : "bg-surface border border-border text-ink rounded-bl-none"
@@ -154,14 +155,16 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
           </details>
 
           {/* Input form */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
+          {sendMutation.isError && <p role="alert" className="text-sm text-danger">Message not sent. Your draft is saved here; please try again.</p>}
+          <form onSubmit={handleSubmit} className="flex items-end gap-2">
+            <textarea
               aria-label="Message"
-              type="text"
-              placeholder="Write a message"
+              rows={2}
+              placeholder="Write a message…"
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
+              onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); handleSubmit(event); } }}
+              className="min-w-0 flex-1 resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
               maxLength={500}
             />
             <Button
@@ -175,6 +178,7 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
               <Send className="h-3.5 w-3.5" />
             </Button>
           </form>
+          <p className="text-xs text-muted">Enter to send · Shift + Enter for a new line <span className="float-right">{messageText.length}/500</span></p>
         </div>
       )}
     </section>

@@ -2,7 +2,7 @@
 import uuid
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select, or_, and_, update
+from sqlalchemy import select, or_, and_, update, case, func
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
 from app.core.errors import AppError
@@ -68,17 +68,19 @@ def favorite_partner(partner_id: uuid.UUID, body: FavoriteIn, request: Request, 
 
 @router.get("/partners/inbox")
 def inbox(request: Request, db: DbSession, user: User = Depends(participant)):
-    rows = db.scalars(select(PartnerMessage).where(or_(PartnerMessage.sender_org_id == user.organization_id, PartnerMessage.recipient_org_id == user.organization_id)).order_by(PartnerMessage.created_at.desc())).all()
-    conversations = {}
-    for msg in rows:
-        other = msg.recipient_org_id if msg.sender_org_id == user.organization_id else msg.sender_org_id
-        key = str(other)
-        if key not in conversations:
-            org = db.get(Organization, other)
-            conversations[key] = {"partner_id": key, "name": org.name, "last_message": msg.message, "updated_at": iso_utc(msg.created_at), "unread": 0}
-        if msg.recipient_org_id == user.organization_id and msg.read_at is None:
-            conversations[key]["unread"] += 1
-    return ok(list(conversations.values()), request.state.request_id)
+    own = user.organization_id
+    other = case((PartnerMessage.sender_org_id == own, PartnerMessage.recipient_org_id), else_=PartnerMessage.sender_org_id)
+    ranked = select(
+        other.label("partner_id"), PartnerMessage.message, PartnerMessage.created_at,
+        func.row_number().over(partition_by=other, order_by=(PartnerMessage.created_at.desc(), PartnerMessage.id.desc())).label("position"),
+        func.sum(case((and_(PartnerMessage.recipient_org_id == own, PartnerMessage.read_at.is_(None)), 1), else_=0))
+            .over(partition_by=other).label("unread"),
+    ).where(or_(PartnerMessage.sender_org_id == own, PartnerMessage.recipient_org_id == own)).subquery()
+    rows = db.execute(select(ranked, Organization.name).join(Organization, Organization.id == ranked.c.partner_id)
+        .where(ranked.c.position == 1).order_by(ranked.c.created_at.desc(), ranked.c.partner_id)).mappings().all()
+    return ok([{"partner_id": str(row["partner_id"]), "name": row["name"], "last_message": row["message"],
+                "updated_at": iso_utc(row["created_at"]), "unread": row["unread"]} for row in rows], request.state.request_id)
+
 
 
 @router.get("/partners/{partner_id}/chat")
@@ -144,7 +146,7 @@ def rate(rescue_id: uuid.UUID, body: RatingIn, request: Request, db: DbSession, 
         rating.stars = body.stars
     db.flush()
     from app.services.trust_service import compute_trust_scores
-    compute_trust_scores(db)
+    compute_trust_scores(db, [target])
     db.commit()
     return ok({"stars": rating.stars}, request.state.request_id)
 

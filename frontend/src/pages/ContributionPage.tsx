@@ -1,6 +1,7 @@
+import { lifetimePosterSvg } from "../lib/lifetimePoster";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Award, Coins, Download, Flame, Leaf, LockKeyhole, Sparkles, ArrowUpRight, HeartHandshake } from "lucide-react";
 import AppShell from "../components/layout/AppShell";
 import Card from "../components/ui/Card";
@@ -8,11 +9,13 @@ import Button from "../components/ui/Button";
 import { useAuth } from "../features/auth/AuthContext";
 import { useToast } from "../features/toast/ToastContext";
 import { apiRequest } from "../lib/api";
-import { downloadPoster, storyPoster, type PosterTheme } from "../lib/recognitionPoster";
+import { downloadPoster, type PosterTheme } from "../lib/recognitionPoster";
 import type { Contribution } from "../types/contribution";
 
 export default function ContributionPage() {
   const {token,user}=useAuth();
+  const [params] = useSearchParams();
+  const posterOnly = params.get("view") === "poster";
   const toast = useToast();
   const receiver=user?.role==="RECEIVER";
   const q=useQuery({queryKey:["contribution",user?.id],queryFn:()=>apiRequest<Contribution>("/contribution",{token})});
@@ -21,17 +24,7 @@ export default function ContributionPage() {
   const [busy,setBusy]=useState(false);
   const [exported,setExported]=useState<{url:string;svg:string}|null>(null);
   const d=q.data;
-  const svg=useMemo(()=>d?storyPoster({name:d.organization_name,theme,
-    title:receiver?"Care creates change.":"A legacy of giving.", eyebrow:"LIFETIME CONTRIBUTION CERTIFICATE",
-    amount:d.coins.toLocaleString("en-IN"), unit:"KINDNESS COINS · 10 PER DELIVERED MEAL",
-    secondary:`${d.impact.total_meals_rescued.toLocaleString("en-IN")} meals ${receiver?"received":"shared"}`,
-    secondaryNote:"Receiver-confirmed delivered servings",
-    third:`${d.impact.food_kg_estimate.toLocaleString("en-IN")} kg food`, thirdNote:"Estimated at 0.4 kg per delivered meal",
-    quote:`${d.medal}. ${d.impact.completed_rescues} completed ${d.impact.completed_rescues===1?"rescue":"rescues"}, ${d.impact.community_partners} community ${d.impact.community_partners===1?"partner":"partners"}. ${receiver?"Your care turns food into belonging. Thank you for making room at the table.":"Your surplus creates possibilities. Thank you for choosing to share, again and again."}`,
-    issuer:"Issued by RescueRelay · Platform contribution record",
-    footer:`All-time record as of ${new Date(d.generated_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC`,
-    badge:"COMMUNITY", disclaimer:"Coins are recognition points, not money. Not food-safety, tax or legal certification.",
-  }):"",[d,theme,receiver]);
+  const svg=useMemo(()=>d?lifetimePosterSvg(d,theme):"",[d,theme]);
   async function exportImage(){setBusy(true);setNotice("");try{const url=await downloadPoster(svg,"RescueRelay-lifetime-contribution.png");setExported({url,svg});setNotice("Lifetime poster ready.");}catch(e){toast.error(e instanceof Error?e.message:"Export failed");}finally{setBusy(false);}}
   function exportLedger(){
     if(!d)return;
@@ -53,8 +46,10 @@ export default function ContributionPage() {
     {title:"Impact",to:"/donor/impact",icon:Leaf},
     {title:"Nearby receivers",to:"/donor",icon:HeartHandshake},
   ];
-  return <AppShell title="Kindness club" nav={receiver?"receiver":"donor"}>
+  return <AppShell title={posterOnly ? "Overall appreciation" : "Kindness club"} nav={receiver?"receiver":"donor"}>
     {q.isPending ? <Card>Loading contribution…</Card> : q.isError ? <Button onClick={() => void q.refetch()}>Retry contribution</Button> : d && <div className="space-y-4">
+    {posterOnly && <nav aria-label="Appreciation type" className="recognition-controls flex flex-wrap gap-2"><Link to="/recognition" className="view-toggle">Per-delivery posters</Link><Link to="/contribution?view=poster" aria-current="page" className="view-toggle selected">Overall appreciation</Link><Link to="/contribution" className="view-toggle">Coins & medals</Link></nav>}
+    {!posterOnly && <>
     <div className="recognition-controls flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-xl font-bold">{d.organization_name}</h2>
       <Link className="view-toggle" to="/leaderboard">Community rankings</Link>
@@ -64,9 +59,10 @@ export default function ContributionPage() {
     <div className="recognition-controls flex flex-wrap gap-2">{tools.map(tool => <Link key={tool.title} to={tool.to} className="view-toggle">
       <tool.icon size={16}/>{tool.title}<ArrowUpRight size={14}/>
     </Link>)}</div>
-    <section id="lifetime-poster" className="grid items-start gap-5 lg:grid-cols-[1.1fr_1fr]"><div className="recognition-print rounded-2xl border border-border bg-white p-2"><img className="w-full rounded-xl" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} alt={`Lifetime contribution certificate for ${d.organization_name}: ${d.coins} kindness coins`}/></div><div className="space-y-4 recognition-controls"><Card><p className="eyebrow text-primary">Your whole story, beautifully told</p><h3 className="mt-2 text-2xl font-bold">An overall certificate.<br/>A reason to be proud.</h3><p className="mt-3 text-sm leading-relaxed text-muted">A platform-issued lifetime contribution record for your storefront, team wall or community update. Individual receiver-issued appreciation stays in the appreciation studio.</p><div className="my-4 flex gap-2">{(["garden","midnight"] as const).map(t=><button key={t} className={`view-toggle ${theme===t?"selected":""}`} aria-pressed={theme===t} onClick={()=>setTheme(t)}>{t==="garden"?"Harvest cream":"Forest & gold"}</button>)}</div><div className="grid gap-2"><Button disabled={busy||d.coins===0} onClick={()=>void exportImage()}><Download size={17}/>{busy?"Creating artwork…":"Download lifetime poster"}</Button><Button variant="secondary" disabled={d.coins===0} onClick={()=>window.print()}>Print / save certificate PDF</Button><Button variant="secondary" onClick={()=>void copyStory()}>Copy your community story</Button></div>{d.coins===0&&<p className="mt-3 text-sm text-muted">Preview your certificate now; your first confirmed delivered meal enables export.</p>}{exported?.svg===svg&&<a className="mt-3 block text-sm text-primary underline" download="RescueRelay-lifetime-contribution.png" href={exported.url}>Save generated PNG again</a>}<p className="mt-4 text-xs text-muted">Estimated figures are labeled on the certificate.</p></Card><Card><h3 className="font-bold">The maths behind your recognition</h3><p className="mt-3 text-sm leading-relaxed text-muted">{d.rules}</p><p className="mt-3 text-sm text-muted">Medals are automatic platform recognition. No paid endorsements, partner discounts or financial redemption are currently offered.</p></Card></div></section>
+    </>}
+    <section id="lifetime-poster" className="grid items-start gap-5 lg:grid-cols-[1.1fr_1fr]"><div className="recognition-print rounded-2xl border border-border bg-white p-2"><img className="w-full rounded-xl" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} alt={`Overall appreciation for ${d.organization_name}: ${d.impact.total_meals_rescued} delivered meals, ${d.medal}`}/></div><div className="space-y-4 recognition-controls"><Card><p className="eyebrow text-primary">Your whole story, beautifully told</p><h3 className="mt-2 text-2xl font-bold">Your total contribution.<br/>One beautiful tribute.</h3><p className="mt-3 text-sm leading-relaxed text-muted">A platform-issued lifetime contribution record for your storefront, team wall or community update. Individual receiver-issued appreciation stays in the appreciation studio.</p><div className="my-4 flex gap-2">{(["garden","midnight"] as const).map(t=><button key={t} className={`view-toggle ${theme===t?"selected":""}`} aria-pressed={theme===t} onClick={()=>setTheme(t)}>{t==="garden"?"Harvest cream":"Forest & gold"}</button>)}</div><div className="grid gap-2"><Button disabled={busy||d.coins===0} onClick={()=>void exportImage()}><Download size={17}/>{busy?"Creating artwork…":"Download overall poster"}</Button><Button variant="secondary" disabled={d.coins===0} onClick={()=>window.print()}>Print / save certificate PDF</Button><Button variant="secondary" onClick={()=>void copyStory()}>Copy your community story</Button></div>{d.coins===0&&<p className="mt-3 text-sm text-muted">Preview your certificate now; your first confirmed delivered meal enables export.</p>}{exported?.svg===svg&&<a className="mt-3 block text-sm text-primary underline" download="RescueRelay-lifetime-contribution.png" href={exported.url}>Save generated PNG again</a>}<p className="mt-4 text-xs text-muted">Estimated figures are labeled on the certificate.</p></Card><Card><h3 className="font-bold">The maths behind your recognition</h3><p className="mt-3 text-sm leading-relaxed text-muted">{d.rules}</p><p className="mt-3 text-sm text-muted">Medals are automatic platform recognition. No paid endorsements, partner discounts or financial redemption are currently offered.</p></Card></div></section>
     {notice&&<p role="status" className="recognition-controls rounded-xl bg-primaryLight p-3 text-sm">{notice}</p>}
-    <Card className="recognition-controls"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-bold">Every coin has a story</h3><Button variant="secondary" onClick={exportLedger} disabled={!d.ledger.length}>Export coin activity CSV</Button></div><p className="mt-2 text-xs text-muted">Latest 100 confirmed rescues. Lifetime balance includes every delivery; retries and poster reissues earn no extra coins.</p><div className="mt-3 divide-y divide-border">{d.ledger.map(r=><Link key={r.rescue_id} to={receiver?`/receiver/pickup/${r.rescue_id}`:`/donor/rescue/${r.rescue_id}`} className="flex min-h-16 items-center justify-between gap-3 py-3"><div><p className="text-sm font-bold">{r.display_id} · {r.meals} meals</p><p className="text-xs text-muted">{new Date(r.at).toLocaleDateString("en-IN")}</p></div><span className="shrink-0 rounded-full bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">+{r.coins.toLocaleString("en-IN")} coins</span></Link>)}{!d.ledger.length&&<p className="py-4 text-sm text-muted">Your first completed delivery will appear here.</p>}</div></Card>
+    {!posterOnly && <Card className="recognition-controls"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-bold">Every coin has a story</h3><Button variant="secondary" onClick={exportLedger} disabled={!d.ledger.length}>Export coin activity CSV</Button></div><p className="mt-2 text-xs text-muted">Latest 100 confirmed rescues. Lifetime balance includes every delivery; retries and poster reissues earn no extra coins.</p><div className="mt-3 divide-y divide-border">{d.ledger.map(r=><Link key={r.rescue_id} to={receiver?`/receiver/pickup/${r.rescue_id}`:`/donor/rescue/${r.rescue_id}`} className="flex min-h-16 items-center justify-between gap-3 py-3"><div><p className="text-sm font-bold">{r.display_id} · {r.meals} meals</p><p className="text-xs text-muted">{new Date(r.at).toLocaleDateString("en-IN")}</p></div><span className="shrink-0 rounded-full bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">+{r.coins.toLocaleString("en-IN")} coins</span></Link>)}{!d.ledger.length&&<p className="py-4 text-sm text-muted">Your first completed delivery will appear here.</p>}</div></Card>}
     </div>}
   </AppShell>;
 }

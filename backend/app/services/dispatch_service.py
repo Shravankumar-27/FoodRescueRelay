@@ -199,7 +199,7 @@ def dispatch_next(db: Session, rescue: Rescue, now: datetime | None = None) -> N
     transition_rescue(db, rescue, RescueStatus.MATCHING, None, reason=NO_CANDIDATES_REASON)
 
 
-def advance_expired_offers(db: Session, now: datetime | None = None) -> int:
+def advance_expired_offers(db: Session, now: datetime | None = None, *, rescue_id=None, donor_org_id=None, receiver_org_id=None) -> int:
     """Time out PENDING offers whose expiry has passed and dispatch onward.
 
     Returns the number of offers processed.
@@ -209,10 +209,19 @@ def advance_expired_offers(db: Session, now: datetime | None = None) -> int:
         MatchOffer.status == OfferStatus.PENDING.value, MatchOffer.expires_at <= current
     )
     active_statuses = ("POSTED", "MATCHING", "OFFERED", "CLAIMED")
-    rescue_ids = db.scalars(select(Rescue.id).where(
+    query = select(Rescue.id).where(
         Rescue.status.in_(active_statuses),
         or_(Rescue.status.in_(("POSTED", "MATCHING")), Rescue.pickup_by <= current, Rescue.id.in_(expired_offers)),
-    ).order_by(Rescue.id)).all()
+    )
+    # A detail/history read need not dispatch unrelated organizations' rescues.
+    # The worker and discovery endpoints still sweep the entire active queue.
+    if rescue_id is not None:
+        query = query.where(Rescue.id == rescue_id)
+    if donor_org_id is not None:
+        query = query.where(Rescue.donor_organization_id == donor_org_id)
+    if receiver_org_id is not None:
+        query = query.where(Rescue.id.in_(select(MatchOffer.rescue_id).where(MatchOffer.receiver_organization_id == receiver_org_id)))
+    rescue_ids = db.scalars(query.order_by(Rescue.id)).all()
     processed = 0
     for rescue_id in rescue_ids:
         rescue = lock_rescue(db, rescue_id)

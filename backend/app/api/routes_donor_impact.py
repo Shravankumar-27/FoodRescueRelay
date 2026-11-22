@@ -43,14 +43,18 @@ def get_leaderboard(
     db: DbSession,
     user: User = Depends(require_roles(UserRole.DONOR, UserRole.RECEIVER, UserRole.ADMIN)),
 ) -> dict[str, Any]:
-    from app.services.trust_service import trust_details
+    from app.services.trust_service import trust_details_many
     from app.services.rewards_service import COINS_PER_MEAL, TIERS
     result = {"donors": [], "receivers": []}
-    for org in db.scalars(select(Organization).where(Organization.organization_type != "ADMIN", Organization.verification_status == "VERIFIED")).all():
+    orgs = db.scalars(select(Organization).where(Organization.organization_type != "ADMIN", Organization.verification_status == "VERIFIED")).all()
+    trust = trust_details_many(db, orgs)
+    meals_by_role = {}
+    for role, field in [("donor", ImpactRecord.donor_organization_id), ("receiver", ImpactRecord.receiver_organization_id)]:
+        meals_by_role[role] = dict(db.execute(select(field, func.sum(ImpactRecord.delivered_servings)).group_by(field)).all())
+    for org in orgs:
         donor = org.organization_type == "CATERER"
-        field = ImpactRecord.donor_organization_id if donor else ImpactRecord.receiver_organization_id
-        meals = int(db.scalar(select(func.sum(ImpactRecord.delivered_servings)).where(field == org.id)) or 0)
-        details = trust_details(db, org)
+        meals = int(meals_by_role["donor" if donor else "receiver"].get(org.id, 0))
+        details = trust[org.id]
         result["donors" if donor else "receivers"].append({"id": str(org.id), "name": org.name, "locality": org.locality,
             "kindness_coins": meals * COINS_PER_MEAL,
             "contribution_medal": max((tier for tier in TIERS if meals * COINS_PER_MEAL >= tier[0]), key=lambda tier: tier[0])[1],

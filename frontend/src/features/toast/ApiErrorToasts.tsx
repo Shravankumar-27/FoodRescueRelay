@@ -9,7 +9,7 @@ export default function ApiErrorToasts() {
   useEffect(() => {
     const shown = new Map<string, number>();
     const queries = client.getQueryCache().subscribe(event => {
-      if (event.type !== "updated" || event.action.type !== "error" || event.query.meta?.silent) return;
+      if (event.type !== "updated" || event.action.type !== "error" || event.query.meta?.silent || event.query.meta?.errorDisplay === "inline") return;
       if (isCancelledError(event.action.error)) return;
       const message = event.action.error.message;
       const now = Date.now();
@@ -21,7 +21,7 @@ export default function ApiErrorToasts() {
       toastError(message);
     });
     const mutations = client.getMutationCache().subscribe(event => {
-      if (event.type === "updated" && event.action.type === "error" && !event.mutation.meta?.silent && !isCancelledError(event.action.error)) {
+      if (event.type === "updated" && event.action.type === "error" && !event.mutation.meta?.silent && event.mutation.meta?.errorDisplay !== "inline" && !isCancelledError(event.action.error)) {
         toastError(event.action.error.message);
       }
     });

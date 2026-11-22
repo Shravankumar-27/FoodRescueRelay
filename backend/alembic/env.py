@@ -5,7 +5,6 @@ import sys
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 
 BACKEND_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -13,6 +12,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
+from app.db.engine import create_database_engine  # noqa: E402
 import app.models  # noqa: E402,F401
 
 config = context.config
@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-url = get_settings().DATABASE_URL
+url = get_settings().migration_database_url
 config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
 is_sqlite = url.startswith("sqlite")
 
@@ -41,11 +41,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations against a live database connection."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_database_engine(url, migrations=True)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,

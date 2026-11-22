@@ -17,7 +17,7 @@ export default function RescueHistoryPage() {
   const [search,setSearch] = useState("");
   const [month,setMonth] = useState(false);
 
-  const mine = useQuery({
+  const mine = useQuery({meta: { errorDisplay: "inline" }, 
     queryKey: ["rescues", "mine"],
     queryFn: () => apiRequest<RescueSummary[]>("/rescues/mine", { token }),
     enabled: !!token,

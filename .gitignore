@@ -15,6 +15,9 @@ backend/data/*.db-shm
 /backend/data.zip
 /backend/data/*.zip
 !backend/data/.gitkeep
+backend/data/.snapshot-state.json
+backend/data/backups/
+backend/data/pytest-temp*/
 node_modules/
 frontend/dist/
 *.log

@@ -64,7 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
-    apiRequest<MeData>("/auth/me", { token: initial.token })
+    queryClient.fetchQuery({
+      queryKey: ["auth", "me", initial.token],
+      meta: { silent: true }, // Session verification reports its own error below.
+      queryFn: () => apiRequest<MeData>("/auth/me", { token: initial.token }),
+      staleTime: 10000,
+      retry: false,
+    })
       .then((me) => {
         if (cancelled) return;
         const next: Session = {
@@ -92,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [initial, toastError]);
+  }, [initial, toastError, queryClient]);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginData> => {
     const data = await apiRequest<LoginData>("/auth/login", {

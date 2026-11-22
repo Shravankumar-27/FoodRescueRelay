@@ -8,12 +8,37 @@ from app.seed.seed_extended import seed_extended
 API = "/api/v1"
 
 
+def test_seed_upgrades_labels_without_breaking_rescue_links(db_session):
+    from app.models import AllocationNotice, Organization, PartnerMessage
+    from app.seed.init_db import seed_demo
+    rescue = db_session.scalar(select(Rescue))
+    rescue_id = rescue.id
+    rescue.display_id = "RR-U7QFRM"
+    rescue.handling_notes = "Synthetic QA listing. Keep refrigerated."
+    receiver = db_session.scalar(select(Organization).where(Organization.name == "Hope Community Kitchen"))
+    message = PartnerMessage(sender_org_id=rescue.donor_organization_id, recipient_org_id=receiver.id,
+                             message="Split proposal for RR-U7QFRM · 10 servings")
+    db_session.add(message)
+    db_session.flush()
+    db_session.add(AllocationNotice(message_id=message.id, rescue_id=rescue.id, items=[]))
+    db_session.flush()
+    seed_demo(db_session)
+    db_session.flush()
+    assert rescue.id == rescue_id
+    assert rescue.display_id.removeprefix("RR-").isdigit()
+    assert rescue.handling_notes == "Keep refrigerated."
+    assert message.message == f"Split proposal for {rescue.display_id} · 10 servings"
+    upgraded = rescue.display_id
+    seed_demo(db_session)
+    assert rescue.display_id == upgraded
+
+
 def test_demo_seed_creates_ranked_deliveries_and_appreciation_without_duplicates(client, donor_headers, db_session):
     seed_extended(db_session)
     db_session.commit()
     models = (Rescue, ImpactRecord, Handoff, DonationRecognition, MealFeedback)
     counts = [db_session.scalar(select(func.count()).select_from(model)) for model in models]
-    assert counts == [43, 31, 32, 31, 31]
+    assert counts == [83, 71, 72, 71, 31]
     seed_extended(db_session)
     db_session.commit()
     assert [db_session.scalar(select(func.count()).select_from(model)) for model in models] == counts

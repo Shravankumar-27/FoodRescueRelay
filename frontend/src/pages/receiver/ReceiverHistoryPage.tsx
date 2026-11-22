@@ -15,7 +15,7 @@ export default function ReceiverHistoryPage() {
   const { token } = useAuth();
   const [status,setStatus] = useState("");
 
-  const historyQuery = useQuery({
+  const historyQuery = useQuery({meta: { errorDisplay: "inline" }, 
     queryKey: ["receiver", "history"],
     queryFn: () => apiRequest<ReceiverHistoryItem[]>("/offers/history", { token }),
     enabled: !!token,
@@ -33,14 +33,7 @@ export default function ReceiverHistoryPage() {
   return (
     <AppShell title="Your rescue history" nav="receiver">
       <div className="flex flex-col gap-4">
-        <Link
-          to="/receiver"
-          className="inline-flex min-h-11 items-center text-sm font-medium underline"
-        >
-          Back to available rescues
-        </Link>
-
-        <label className="text-sm font-semibold">Filter pickup history<select value={status} onChange={e=>setStatus(e.target.value)} className="ml-3"><option value="">All pickups</option>{["CLAIMED","COLLECTED","DELIVERED","CANCELLED","EXPIRED"].map(s=><option value={s} key={s}>{s.toLowerCase()}</option>)}</select></label>
+<label className="text-sm font-semibold">Filter pickup history<select value={status} onChange={e=>setStatus(e.target.value)} className="ml-3"><option value="">All pickups</option>{["CLAIMED","COLLECTED","DELIVERED","CANCELLED","EXPIRED"].map(s=><option value={s} key={s}>{s.toLowerCase()}</option>)}</select></label>
         {historyQuery.isLoading ? (
           <Skeleton className="h-48 w-full" />
         ) : otherError ? (

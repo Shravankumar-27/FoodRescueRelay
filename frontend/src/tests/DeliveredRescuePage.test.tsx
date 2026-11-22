@@ -57,7 +57,10 @@ describe("delivered rescue details", () => {
       });
 
     renderRescue();
-    expect(await screen.findByText("Estimated 24.0 kg CO₂e avoided")).toBeVisible();
+    expect(await screen.findByText("Estimated climate benefit")).toBeVisible();
+    expect(screen.getByText("kg CO₂e avoided")).toBeVisible();
+    expect(screen.getByText("9.6 kg")).toBeVisible();
+    expect(screen.getByText("Meals delivered")).toBeVisible();
     expect(screen.queryByText("How we calculate this")).toBeNull();
     const chat = screen.getByRole("button", { name: "Messages with City Food Relief" });
     expect(chat).toHaveAttribute("aria-expanded", "false");

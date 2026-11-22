@@ -6,7 +6,8 @@ from uuid import UUID
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.errors import AppError
 from app.core.security import decode_access_token
@@ -35,7 +36,7 @@ def get_current_user(
             401,
         ) from exc
 
-    user = db.get(User, user_id)
+    user = db.scalar(select(User).options(joinedload(User.organization)).where(User.id == user_id))
     if user is None:
         raise AppError(
             "INVALID_TOKEN",

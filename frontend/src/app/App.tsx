@@ -55,7 +55,9 @@ export default function App() {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { retry: 1, refetchOnWindowFocus: false },
+          // Keep recent results when navigating; explicit mutations still invalidate
+          // immediately, and live status/offer polling keeps its existing cadence.
+          queries: { retry: 1, staleTime: 10000, refetchOnWindowFocus: false },
         },
       }),
   );

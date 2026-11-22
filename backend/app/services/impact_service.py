@@ -83,11 +83,13 @@ def impact_summary(
     donor_org_id: uuid.UUID | None,
     receiver_org_id: uuid.UUID | None,
     now: datetime,
+    *,
+    delivered_rows: list[Any] | None = None,
 ) -> dict[str, Any]:
     current = ensure_utc(now)
     month_start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    rows = _delivered_rows(db, donor_org_id, receiver_org_id)
+    rows = delivered_rows if delivered_rows is not None else _delivered_rows(db, donor_org_id, receiver_org_id)
     denominator = _rescue_denominator(db, donor_org_id, receiver_org_id)
 
     total_meals = 0

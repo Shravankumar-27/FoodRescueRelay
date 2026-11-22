@@ -13,6 +13,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 BACKEND_DIR = pathlib.Path(__file__).resolve().parent.parent
+# Tests must never inherit the online target selected in a developer's .env.
+os.environ["DATABASE_TARGET"] = "local"
+os.environ["NEON_DATABASE_URL"] = ""
+os.environ["NEON_DIRECT_DATABASE_URL"] = ""
 TEST_DB_PATH = BACKEND_DIR / "data" / f"_pytest_{os.getpid()}.db"
 _TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 if _TEST_DATABASE_URL:

@@ -433,6 +433,8 @@ def seed_extended(session) -> None:
 
     session.flush()
     _seed_active_scenarios(session, donor_orgs, receiver_orgs)
+    from app.seed.seed_champions import seed_champions
+    seed_champions(session)
     from app.services.trust_service import compute_trust_scores
     compute_trust_scores(session)
 
@@ -493,7 +495,12 @@ def _seed_active_scenarios(session, donors, receivers):
             session.add(handoff)
             session.add(StatusEvent(rescue_id=rescue.id, from_status="POSTED", to_status="CLAIMED",
                                     created_at=now + timedelta(microseconds=1)))
-    for name, resource in (("Demo Container Bank", "containers"), ("Demo Community Courier", "transport")):
+    for name, resource in (("Hyderabad Container Bank", "containers"), ("Hyderabad Community Courier", "transport")):
+        legacy_name = "Demo Container Bank" if resource == "containers" else "Demo Community Courier"
+        legacy = session.scalar(select(LogisticsProvider).where(LogisticsProvider.name == legacy_name))
+        if legacy and not session.scalar(select(LogisticsProvider.id).where(LogisticsProvider.name == name)):
+            legacy.name = name
+            session.flush()
         if not session.scalar(select(LogisticsProvider.id).where(LogisticsProvider.name == name)):
             session.add(LogisticsProvider(
                 name=name, contact=f"{resource}@rescuerelay.example", resource=resource,

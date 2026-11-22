@@ -1,6 +1,7 @@
+import BackButton from "../components/ui/BackButton";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Utensils, LogIn, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Utensils, LogIn, Eye, EyeOff, CheckCircle2, HeartHandshake } from "lucide-react";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../features/auth/AuthContext";
@@ -25,7 +26,7 @@ const DEMO_ACCOUNTS: { email: string; label: string; role: string; color: string
   {
     email: "shelter@rescuerelay.demo",
     label: "NGO",
-    role: "ShelterServe",
+    role: "ShelterServe Community Shelter",
     color: "border-info/40 hover:border-info hover:bg-infoLight",
   },
   {
@@ -80,7 +81,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-green-50 via-background to-background">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-green-50 via-white to-green-50">
       {/* Header */}
       <header className="border-b border-border bg-surface/80 px-4 py-3 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
@@ -90,22 +91,21 @@ export default function LoginPage() {
             </span>
             RescueRelay
           </Link>
-          <Link to="/" className="flex items-center gap-1.5 text-sm text-muted hover:text-ink">
-            <ArrowLeft className="h-4 w-4" />
-            Back to home
-          </Link>
+          <BackButton fallback="/home"/>
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 px-4 py-8 md:grid-cols-2 md:gap-0 md:px-8">
-        <section className="rounded-2xl border border-border bg-surface p-6 shadow-card md:rounded-r-none md:p-10">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 content-center gap-5 px-4 py-8 md:grid-cols-2 md:gap-0 md:px-8">
+        <section className="rounded-3xl border border-border bg-surface p-6 shadow-card md:rounded-r-none md:p-10 lg:p-12">
           <div className="mb-6">
             <div className="mb-4 flex">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primaryLight">
                 <Utensils className="h-8 w-8 text-primary" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-ink">Sign in to RescueRelay</h1>
+            <p className="eyebrow mb-3 text-primary">Welcome to the community</p>
+            <h1 className="text-3xl font-bold tracking-tight text-ink">Good food.<br/>A fresh start.</h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted">Sign in to RescueRelay to share surplus, coordinate a pickup, or see the difference you make.</p>
           </div>
 
           {/* Login form */}
@@ -149,21 +149,24 @@ export default function LoginPage() {
             </Button>
           </form>
         </section>
-        <section className="rounded-2xl border border-border bg-primaryLight p-6 md:rounded-l-none md:border-l-0 md:p-10" aria-labelledby="quick-access">
-          <h2 id="quick-access" className="text-xl font-bold text-primaryDark">Quick access</h2>
-          <p className="mb-4 mt-1 text-sm text-muted">Select an account to fill the sign-in form.</p>
-          <div className="grid grid-cols-1 gap-2">
+        <section className="harvest-hero rounded-3xl p-6 md:rounded-l-none md:p-10 lg:p-12" aria-labelledby="quick-access">
+          <HeartHandshake className="mb-5 h-9 w-9 text-amber-200" aria-hidden="true"/>
+          <h2 id="quick-access" className="text-2xl font-bold">One community.<br/>Many ways to help.</h2>
+          <p className="mb-5 mt-3 text-sm leading-relaxed text-white/80">Choose your workspace to fill the sign-in form.</p>
+          <div className="grid grid-cols-1 gap-3">
             {DEMO_ACCOUNTS.map((account) => (
               <button
                 key={account.email}
                 type="button"
-                className={`flex min-h-12 items-center gap-3 rounded-xl border bg-surface px-3 text-left transition-all ${account.color}`}
+                aria-pressed={email === account.email}
+                className={`flex min-h-14 items-center gap-3 rounded-xl border bg-surface px-3 py-3 text-left transition-all ${email === account.email ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-primaryDark" : ""} ${account.color}`}
                 onClick={() => fillDemo(account.email)}
               >
                 <span className="inline-flex w-14 shrink-0 justify-center rounded-full bg-background px-2 py-0.5 text-xs font-semibold text-muted">
                   {account.label}
                 </span>
-                <span className="text-sm font-medium text-ink">{account.role}</span>
+                <span className="flex-1 text-sm font-semibold text-ink">{account.role}</span>
+                {email === account.email && <CheckCircle2 size={18} className="shrink-0 text-primary" aria-hidden="true"/>}
               </button>
             ))}
           </div>

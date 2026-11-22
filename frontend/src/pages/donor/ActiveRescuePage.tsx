@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ChevronDown, Copy, Handshake, Package, Repeat2, Route, Utensils } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
+import DeliveryImpact from "../../components/impact/DeliveryImpact";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import Skeleton from "../../components/ui/Skeleton";
@@ -171,12 +172,7 @@ export default function ActiveRescuePage() {
             {needsRetry && <Button className="mt-3" variant="secondary" disabled={dispatch.isPending} onClick={() => dispatch.mutate()}>Retry matching</Button>}
             </div>
           </AllocationPuzzle> : status === "DELIVERED" ? <Card className="min-w-0">
-            <h3 className="text-base font-semibold">Delivery impact</h3>
-            {d.impact?.delivered_servings != null && (
-              <p className="mt-3 rounded-xl bg-primaryLight p-4 text-lg font-bold text-primaryDark">
-                Estimated {(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided
-              </p>
-            )}
+            {d.impact?.delivered_servings != null ? <DeliveryImpact meals={d.impact.delivered_servings}/> : <h3 className="font-semibold">Delivery impact unavailable</h3>}
           </Card> : <Card className="min-w-0">
             <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Handshake size={18} className="text-primary"/>Pickup</h3>
             {d.claimed_receiver && <div className="rounded-xl bg-background p-3">

@@ -1,5 +1,15 @@
 # How to run RescueRelay
 
+## Shared database setup
+
+Use `python -m app.db.snapshot install` from `backend` after installing dependencies,
+then start the API. This restores the exact committed dataset and enables export
+on commit / restore on pull. Each teammate runs this setup once. Do not run seed
+or reset commands when you want to preserve shared data. See [the complete sharing
+and recovery guide](docs/SHARED_DATABASE.md).
+
+The seed/reset instructions below are for creating a separate fresh dataset.
+
 ## Allocation, reassignment, and pickup coordination
 
 Upgrade an existing database with `alembic upgrade head` from `backend`, then run `python -m app.seed.init_db` for a local demo database. Restart the API and frontend afterwards. Migration `0008` adds saved partners and the provider directory.

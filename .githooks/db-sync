@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)/backend"
+if [ -x .venv/Scripts/python.exe ]; then
+  .venv/Scripts/python.exe -m app.db.snapshot "$@"
+elif [ -x .venv/bin/python ]; then
+  .venv/bin/python -m app.db.snapshot "$@"
+elif [ -x venv/Scripts/python.exe ]; then
+  venv/Scripts/python.exe -m app.db.snapshot "$@"
+else
+  python -m app.db.snapshot "$@"
+fi

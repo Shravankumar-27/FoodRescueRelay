@@ -1,0 +1,2 @@
+.githooks/* text eol=lf
+backend/data/shared.sql text eol=lf merge=binary

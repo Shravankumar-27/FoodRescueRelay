@@ -134,12 +134,14 @@ export default function ReceiverHomePage() {
   const [activeOfferId, setActiveOfferId] = useState<string | null>(null);
 
   const capacityQuery = useQuery({
+    meta: { errorDisplay: "inline" },
     queryKey: ["receiver", "capacity"],
     queryFn: () => apiRequest<CapacityData>("/receivers/capacity", { token }),
     enabled: !!token,
   });
 
   const offersQuery = useQuery({
+    meta: { errorDisplay: "inline" },
     queryKey: ["receiver", "offers"],
     queryFn: () => apiRequest<OfferAvailable[]>("/offers/available?include_portions=true", { token }),
     enabled: !!token,
@@ -225,15 +227,15 @@ export default function ReceiverHomePage() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <nav aria-label="Receiver tools" className="grid w-full gap-2 sm:grid-cols-3">
-            <Link to="/receiver/planner" className="view-toggle justify-center"><ClipboardList size={18}/>Allocation planner</Link>
-            <Link to="/messages" className="view-toggle justify-center"><Heart size={18}/>Saved donors</Link>
-            <Link to="/recognition" className="view-toggle justify-center"><Award size={18}/>Appreciation</Link>
+            <Link to="/receiver/planner" className="tool-card"><span className="tool-icon"><ClipboardList size={22}/></span><span><strong className="block text-sm">Allocation planner</strong><span className="mt-1 block text-sm text-muted">Plan meals for your groups</span></span></Link>
+            <Link to="/messages" className="tool-card"><span className="tool-icon"><Heart size={22}/></span><span><strong className="block text-sm">Saved donors</strong><span className="mt-1 block text-sm text-muted">Reconnect with your partners</span></span></Link>
+            <Link to="/recognition" className="tool-card"><span className="tool-icon"><Award size={22}/></span><span><strong className="block text-sm">Appreciation</strong><span className="mt-1 block text-sm text-muted">Celebrate a shared delivery</span></span></Link>
           </nav>
         </div>
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Compatible listings" value={offersQuery.isPending ? "—" : offers.length} note="Based on your capacity & diet"/><Metric label="Active pickups" value={activePickups.length} note="Waiting for your next step"/><Metric label="Meals this month" value={impact.data?.meals_rescued_month ?? "—"} note="Confirmed deliveries"/><Metric label="Meals received" value={impact.data?.total_meals_rescued ?? "—"} note="All-time contribution"/></section>
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className={`grid items-stretch gap-4 ${activePickups.length ? "lg:grid-cols-2" : ""}`}>
         {activePickups.length > 0 && <Card><h3 className="mb-2 font-bold">Active pickups</h3>{activePickups.map(r => <Link key={r.rescue_id} to={`/receiver/pickup/${r.rescue_id}`} className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><strong>{r.rescue_display_id}</strong><span className="font-semibold text-primary">{r.status === "CLAIMED" ? "Confirm collection" : "Record delivery"}</span></Link>)}</Card>}
-        {offersQuery.isError && !offlineError && <button className="view-toggle" onClick={() => void offersQuery.refetch()}>Retry offers</button>}
+        {offersQuery.isError && !offlineError && <div role="alert"><p className="mb-2 text-sm text-danger">{offersQuery.error.message}</p><button className="view-toggle" onClick={() => void offersQuery.refetch()}>Retry offers</button></div>}
 
         {offlineError && (
           <div role="alert" className="rounded-xl border border-warn/30 bg-warn/5 p-3 text-sm text-warn">
@@ -287,27 +289,28 @@ export default function ReceiverHomePage() {
 
         <Card>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">Filter offers</h2>
+            <div><h2 className="font-semibold">Find the right food</h2><p className="mt-1 text-sm text-muted">Narrow available rescues to what your community needs.</p></div>
             <Link to="/receiver/capacity" className="text-sm font-semibold text-primary hover:underline">Edit food preferences</Link>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <select aria-label="Donor locality" value={area} onChange={event => setArea(event.target.value)}>
+            <label className="grid gap-2 text-sm font-semibold">Locality<select aria-label="Donor locality" value={area} onChange={event => setArea(event.target.value)}>
               <option value="">All localities</option>
               {[...new Set([...areas, ...(area ? [area] : [])])].map(location => <option key={location}>{location}</option>)}
-            </select>
-            <select aria-label="Filter available food by diet" value={diet} onChange={event => setDiet(event.target.value)}>
+            </select></label>
+            <label className="grid gap-2 text-sm font-semibold">Dietary preference<select aria-label="Filter available food by diet" value={diet} onChange={event => setDiet(event.target.value)}>
               <option value="">All compatible diets</option>
               {DIETS.map(value => <option key={value} value={value}>{foodLabel(value)}</option>)}
-            </select>
-            <select aria-label="Filter available food by category" value={category} onChange={event => setCategory(event.target.value)}>
+            </select></label>
+            <label className="grid gap-2 text-sm font-semibold">Food category<select aria-label="Filter available food by category" value={category} onChange={event => setCategory(event.target.value)}>
               <option value="">All food categories</option>
               {CATEGORIES.map(value => <option key={value} value={value}>{foodLabel(value)}</option>)}
-            </select>
-            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm">
+            </select></label>
+            <label className="flex min-h-12 items-center gap-2 self-end rounded-xl border border-border px-3 text-sm">
               <input type="checkbox" checked={favoritesOnly} onChange={event => setFavoritesOnly(event.target.checked)}/>
               Favorite donors
             </label>
           </div>
+          {(area || diet || category || favoritesOnly) && <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm"><span className="text-muted">{offers.length} matching rescues</span><button type="button" className="font-semibold text-primary" onClick={() => {setArea(""); setDiet(""); setCategory(""); setFavoritesOnly(false);}}>Clear filters</button></div>}
         </Card>
         {/* List / Map toggle */}
         <div className="flex gap-1 rounded-xl bg-background p-1 w-fit">

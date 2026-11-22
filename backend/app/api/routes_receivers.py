@@ -18,7 +18,7 @@ from app.models.receiver_capacity import ReceiverCapacity
 from app.models.user import User
 from app.services import geo
 from app.services.rescue_service import iso_utc
-from app.services.capacity_service import reserved_servings, free_servings
+from app.services.capacity_service import reserved_servings, reserved_servings_by_org
 
 router = APIRouter(prefix="/receivers", tags=["receivers"])
 
@@ -67,11 +67,12 @@ def _get_or_create(db: DbSession, user: User) -> ReceiverCapacity:
 
 
 def _serialize(capacity: ReceiverCapacity, db) -> dict[str, Any]:
+    reserved = reserved_servings(db, capacity.organization_id)
     return {
         "available": capacity.available,
         "max_servings": capacity.max_servings,
-        "available_servings": free_servings(db, capacity),
-        "reserved_servings": reserved_servings(db, capacity.organization_id),
+        "available_servings": max(0, capacity.available_servings - reserved),
+        "reserved_servings": reserved,
         "accepts_veg": capacity.accepts_veg,
         "accepts_non_veg": capacity.accepts_non_veg,
         "transport_available": capacity.transport_available,
@@ -152,20 +153,21 @@ def list_nearby_receivers(
 ) -> dict[str, Any]:
     """Return receivers within 15km of the donor's organization."""
     donor_org = user.organization
-    all_orgs = db.scalars(
-        select(Organization).where(
+    org_caps = db.execute(
+        select(Organization, ReceiverCapacity).join(ReceiverCapacity, ReceiverCapacity.organization_id == Organization.id).where(
             Organization.organization_type.notin_([OrganizationType.CATERER.value, OrganizationType.ADMIN.value])
             , Organization.verification_status == "VERIFIED"
         )
     ).all()
-    from app.services.trust_service import trust_details
+    from app.services.trust_service import trust_details_many
+    org_caps = [(org, cap) for org, cap in org_caps if geo.haversine_km(donor_org.latitude, donor_org.longitude, org.latitude, org.longitude) <= 15.0]
+    orgs = [org for org, _ in org_caps]
+    trust = trust_details_many(db, orgs)
+    reserved = reserved_servings_by_org(db, [org.id for org in orgs])
     nearby = []
-    for org in all_orgs:
+    for org, cap in org_caps:
         dist = geo.haversine_km(donor_org.latitude, donor_org.longitude, org.latitude, org.longitude)
         if dist <= 15.0:
-            cap = db.scalar(select(ReceiverCapacity).where(ReceiverCapacity.organization_id == org.id))
-            if cap is None:
-                continue
             if dietary_type:
                 if cap.accepted_dietary_types and dietary_type.value not in cap.accepted_dietary_types:
                     continue
@@ -175,7 +177,7 @@ def list_nearby_receivers(
             if food_category and cap.accepted_food_categories and food_category.value not in cap.accepted_food_categories:
                 continue
             nearby.append({
-                **trust_details(db, org),
+                **trust[org.id],
                 "id": str(org.id),
                 "name": org.name,
                 "locality": org.locality,
@@ -190,7 +192,7 @@ def list_nearby_receivers(
                 "distance_km": round(dist, 2),
                 "available": cap.available if cap else False,
                 "max_servings": cap.max_servings if cap else 0,
-                "available_servings": free_servings(db, cap),
+                "available_servings": max(0, cap.available_servings - reserved.get(org.id, 0)),
                 "need_level": cap.need_level if cap else "MEDIUM",
                 "transport_available": cap.transport_available if cap else False,
                 "refrigeration_available": cap.refrigeration_available,

@@ -53,6 +53,10 @@ backend/           FastAPI · SQLAlchemy 2 · SQLite (default) / PostgreSQL
 
 ### Backend
 
+For optional online PostgreSQL, keep your SQLite configuration and add the pooled
+Neon URL to `NEON_DATABASE_URL` in `backend/.env`. Set `DATABASE_TARGET=neon` to
+switch, or `local` to return. See [Neon setup](docs/NEON_DATABASE.md).
+
 ```bash
 cd backend
 
@@ -68,14 +72,19 @@ pip install -r requirements.txt
 # In backend/.env, comment out DATABASE_URL to use SQLite:
 # DATABASE_URL=sqlite:///./rescuerelay.db   ← already the fallback
 
-# 4. Seed database (base + extended: 30+ rescues)
-python -m app.seed.seed_extended
+# 4. Restore the shared database and enable Git synchronization (once per clone)
+python -m app.db.snapshot install
 
 # 5. Start server
 uvicorn app.main:app --reload --port 8000
 ```
 
 API docs: http://localhost:8000/docs
+
+The populated development database now travels with Git in `backend/data/shared.sql`.
+Commits export the dataset; pulls restore it with conflict checks and local backups.
+See [database sharing and recovery](docs/SHARED_DATABASE.md) before replacing existing
+local data. For a separate fresh generated dataset, use `python -m app.seed.seed_extended`.
 
 ### Frontend
 

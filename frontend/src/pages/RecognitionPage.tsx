@@ -1,3 +1,4 @@
+import BackButton from "../components/ui/BackButton";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ export default function RecognitionPage({ publicView = false }: {publicView?:boo
   const loading=publicView?verified.isPending:records.isPending;
   const error=publicView?verified.error:records.error;
   const content=<div className="space-y-5">
-    {!publicView && <Link className="recognition-controls inline-flex text-sm font-bold text-primary" to="/contribution">View coins and medals</Link>}
+    {!publicView && <nav aria-label="Appreciation type" className="recognition-controls flex flex-wrap gap-2"><Link className="view-toggle selected" aria-current="page" to="/recognition">Per-delivery posters</Link><Link className="view-toggle" to="/contribution?view=poster">Overall appreciation</Link><Link className="view-toggle" to="/contribution">Coins & medals</Link></nav>}
     {error && <Card><h3 className="font-bold">{publicView ? "Acknowledgement unavailable" : "Recognition could not load"}</h3>
       <Button variant="secondary" className="mt-3" onClick={() => publicView ? void verified.refetch() : void records.refetch()}>Retry</Button></Card>}
     {loading ? <Card>Loading appreciation…</Card> : !error && !current ? <Card><h3 className="font-bold">No appreciation issued yet</h3>
@@ -66,5 +67,5 @@ export default function RecognitionPage({ publicView = false }: {publicView?:boo
     </div>}
     {!publicView&&(records.data?.length??0)>0&&<Card className="recognition-controls"><h3 className="mb-3 font-bold">Your appreciation archive</h3><div className="grid gap-2 sm:grid-cols-2">{records.data?.map(r=><button key={r.rescue_id} onClick={()=>{setParams({rescue:r.rescue_id});setNotice("");}} className={`rounded-xl border p-3 text-left ${current?.rescue_id===r.rescue_id?"border-primary bg-primaryLight/30":"border-border"}`}><span className="block text-sm font-bold">{r.delivered_servings} meals · {r.receiver_name}</span><span className="mt-1 block text-xs text-muted">{r.display_id} · {r.status==="ISSUED"?"Issued":"Withdrawn"}</span></button>)}</div><p className="mt-3 text-xs text-muted">Latest 100 acknowledgements. Open the delivery record to issue or withdraw one.</p></Card>}
   </div>;
-  return publicView?<main className="recognition-public mx-auto max-w-6xl p-4 sm:p-8"><Link to="/home" className="recognition-controls mb-4 inline-block font-bold text-primary">RescueRelay</Link>{content}</main>:<AppShell title="Appreciation studio" nav={user?.role==="RECEIVER"?"receiver":"donor"}>{content}</AppShell>;
+  return publicView?<main className="recognition-public mx-auto max-w-6xl p-4 sm:p-8"><BackButton/><Link to="/home" className="recognition-controls mb-4 inline-block font-bold text-primary">RescueRelay</Link>{content}</main>:<AppShell title="Appreciation studio" nav={user?.role==="RECEIVER"?"receiver":"donor"}>{content}</AppShell>;
 }

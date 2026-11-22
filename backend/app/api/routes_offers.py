@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError, IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
@@ -158,16 +158,26 @@ def list_available(
     now = utcnow()
     advance_expired_offers(db, now)
     db.commit()
-    rescues = db.scalars(select(Rescue).where(Rescue.status.in_(["POSTED", "MATCHING", "OFFERED"]), Rescue.pickup_by > now).order_by(Rescue.pickup_by)).all()
+    rows = db.execute(select(Rescue, Organization)
+        .join(Organization, Organization.id == Rescue.donor_organization_id)
+        .options(selectinload(Rescue.food_items))
+        .where(Rescue.status.in_(["POSTED", "MATCHING", "OFFERED"]), Rescue.pickup_by > now,
+               Organization.verification_status == "VERIFIED").order_by(Rescue.pickup_by)).all()
+    if not rows:
+        return ok([], _request_id(request))
+    # A receiver's capacity/preferences are the same for every listing in this read.
+    # Claims still revalidate under locks using fresh database state.
+    candidates = load_candidates(db, rows[0][0], now, receiver_id=user.organization_id)
+    if not candidates:
+        return ok([], _request_id(request))
+    offers_by_rescue = {}
+    for offer in db.scalars(select(MatchOffer).where(
+        MatchOffer.rescue_id.in_([rescue.id for rescue, _ in rows]),
+        MatchOffer.receiver_organization_id == user.organization_id).order_by(MatchOffer.created_at.desc())).all():
+        offers_by_rescue.setdefault(offer.rescue_id, []).append(offer)
+    buffer = get_settings().MATCHING_SAFETY_BUFFER_MINUTES
     items = []
-    for rescue in rescues:
-        donor = db.get(Organization, rescue.donor_organization_id)
-        if donor.verification_status != "VERIFIED":
-            continue
-        candidates = load_candidates(db, rescue, now, receiver_id=user.organization_id)
-        if not candidates:
-            continue
-        buffer = get_settings().MATCHING_SAFETY_BUFFER_MINUTES
+    for rescue, donor in rows:
         candidate, = evaluate_candidates(build_rescue_input(rescue, rescue.food_items), candidates, now, buffer)
         visible_food = rescue.food_items
         portion_only = not candidate.feasible
@@ -184,7 +194,7 @@ def list_available(
             )[0].feasible]
             if not visible_food:
                 continue
-        offers = db.scalars(select(MatchOffer).where(MatchOffer.rescue_id == rescue.id, MatchOffer.receiver_organization_id == user.organization_id).order_by(MatchOffer.created_at.desc())).all()
+        offers = offers_by_rescue.get(rescue.id, [])
         if any(o.status == "DECLINED" for o in offers):
             continue
         direct = next((o for o in offers if o.status == "PENDING" and ensure_utc(o.expires_at) > now), None) if not portion_only else None
@@ -218,7 +228,7 @@ def list_history(
     db: DbSession,
     user: User = Depends(require_roles(UserRole.RECEIVER)),
 ) -> dict[str, Any]:
-    advance_expired_offers(db)
+    advance_expired_offers(db, receiver_org_id=user.organization_id)
     db.commit()
     rows = db.execute(
         select(MatchOffer, Rescue, Handoff)

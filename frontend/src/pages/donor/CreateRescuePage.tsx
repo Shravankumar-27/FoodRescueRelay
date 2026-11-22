@@ -352,7 +352,6 @@ export default function CreateRescuePage() {
     const errs = validateFood(rows);
     setFoodErrs(errs);
     if (Object.keys(errs).length === 0) setStep(2);
-    else toastError("Check the food names and serving quantities.");
   }
 
   function nextFromHandling() {
@@ -361,7 +360,6 @@ export default function CreateRescuePage() {
     if (!holding) errs.holding = "Choose how the food was held.";
     setHandErrs(errs);
     if (Object.keys(errs).length === 0) setStep(3);
-    else toastError(errs.untouched ?? errs.holding);
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -369,7 +367,7 @@ export default function CreateRescuePage() {
     if (step !== 3) return;
     const errs = validateTiming(prepared, pickup, attest);
     setTimingErrs(errs);
-    if (Object.keys(errs).length > 0) return toastError(Object.values(errs)[0]);
+    if (Object.keys(errs).length > 0) return;
     create.mutate();
   }
 
@@ -672,7 +670,7 @@ export default function CreateRescuePage() {
                 </div>
               )}
 
-              {timingErrs.pickup && <p className="text-sm text-urgent">{timingErrs.pickup}</p>}
+              {!customTime && timingErrs.pickup && <p role="alert" className="text-sm text-urgent">{timingErrs.pickup}</p>}
             </div>
 
             <Input

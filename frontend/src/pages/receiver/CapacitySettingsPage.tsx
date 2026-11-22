@@ -8,9 +8,9 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
-import { useToast } from "../../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../../lib/api";
 import type { CapacityData } from "../../types/api";
+import { Settings2, Truck, Utensils, Building2, Save } from "lucide-react";
 
 type NeedLevel = "LOW" | "MEDIUM" | "HIGH";
 
@@ -44,13 +44,12 @@ interface FormState {
 
 export default function CapacitySettingsPage() {
   const { token } = useAuth();
-  const { error: toastError } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const capacityQuery = useQuery({
+  const capacityQuery = useQuery({meta: { errorDisplay: "inline" }, 
     queryKey: ["receiver", "capacity"],
     queryFn: () => apiRequest<CapacityData>("/receivers/capacity", { token }),
     enabled: !!token,
@@ -78,7 +77,7 @@ export default function CapacitySettingsPage() {
     }
   }, [capacityQuery.data]);
 
-  const saveMutation = useMutation({
+  const saveMutation = useMutation({meta: { errorDisplay: "inline" }, 
     mutationFn: (body: CapacityData) =>
       apiRequest<CapacityData>("/receivers/capacity", {
         method: "PUT",
@@ -93,6 +92,7 @@ export default function CapacitySettingsPage() {
   });
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    saveMutation.reset();
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
     setSuccess(null);
     setClientError(null);
@@ -102,24 +102,34 @@ export default function CapacitySettingsPage() {
     e.preventDefault();
     if (!form) return;
     setSuccess(null);
+    saveMutation.reset();
 
     const max = Number(form.max_servings);
     const avail = Number(form.available_servings);
 
-    if (!Number.isInteger(max) || max < 0) {
-      const message = "Maximum servings must be a whole number of 0 or more.";
+    if (!form.max_servings.trim() || !Number.isInteger(max) || max < 0 || max > 100000) {
+      const message = "Maximum servings must be a whole number between 0 and 100,000.";
       setClientError(message);
-      return toastError(message);
+      return;
     }
-    if (!Number.isInteger(avail) || avail < 0) {
-      const message = "Available servings must be a whole number of 0 or more.";
+    if (!form.available_servings.trim() || !Number.isInteger(avail) || avail < 0 || avail > 100000) {
+      const message = "Available servings must be a whole number between 0 and 100,000.";
       setClientError(message);
-      return toastError(message);
+      return;
     }
     if (avail > max) {
       const message = "Available servings cannot be more than your maximum servings.";
       setClientError(message);
-      return toastError(message);
+      return;
+    }
+    if (!form.accepts_veg && !form.accepts_non_veg) {
+      setClientError(CODE_MESSAGES.DIETARY_REQUIRED);
+      return;
+    }
+    if (form.volunteer_servings !== "" && (!Number.isInteger(Number(form.volunteer_servings)) || Number(form.volunteer_servings) < 0 || Number(form.volunteer_servings) > 100000)) {
+      const message = "Volunteer capacity must be a whole number between 0 and 100,000.";
+      setClientError(message);
+      return;
     }
     setClientError(null);
 
@@ -153,6 +163,7 @@ export default function CapacitySettingsPage() {
   return (
     <AppShell title="Capacity settings" nav="receiver">
       <div className="flex flex-col gap-4">
+        <section className="harvest-hero"><Settings2 className="mb-3 text-lime-200"/><p className="eyebrow text-white/70">Your receiving workspace</p><h2 className="mt-2 text-3xl font-bold">Ready for the next rescue.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">Keep your capacity, pickup resources and food preferences up to date so the right meals reach your team.</p></section>
         <Link
           to="/receiver"
           className="inline-flex min-h-11 items-center text-sm font-medium underline"
@@ -171,6 +182,7 @@ export default function CapacitySettingsPage() {
             <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
               <fieldset className="rounded-xl border border-border p-4">
                 <legend className="px-2 font-bold text-ink">Availability and capacity</legend>
+                <p className="mb-3 text-sm text-muted">Set your total limit and how many more servings you can receive now.</p>
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
@@ -226,7 +238,7 @@ export default function CapacitySettingsPage() {
               </fieldset>
               <div className="grid gap-4 lg:grid-cols-2">
                 <fieldset className="space-y-3 rounded-xl border border-border p-4">
-                  <legend className="px-2 font-bold text-ink">Pickup and storage</legend>
+                  <legend className="px-2 font-bold text-ink"><span className="inline-flex items-center gap-2"><Truck size={18}/>Pickup and storage</span></legend>
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
@@ -249,13 +261,13 @@ export default function CapacitySettingsPage() {
 
                 </fieldset>
                 <fieldset className="space-y-3 rounded-xl border border-border p-4">
-                  <legend className="px-2 font-bold text-ink">Organization profile</legend>
-                  <Input label="About your organization" maxLength={500} value={form.description}
-                    onChange={event => update("description", event.target.value)}/>
+                  <legend className="px-2 font-bold text-ink"><span className="inline-flex items-center gap-2"><Building2 size={18}/>Organization profile</span></legend>
+                  <label className="grid gap-2 text-sm font-semibold">About your organization<textarea className="min-h-32 w-full resize-y rounded-xl border border-border p-3 font-normal" maxLength={500} value={form.description} placeholder="Tell donors who you serve and how your team distributes meals." onChange={event => update("description", event.target.value)}/></label>
+                  <p className="text-right text-xs text-muted">{form.description.length}/500</p>
                 </fieldset>
               </div>
               <fieldset className="space-y-4 rounded-xl border border-border p-4">
-                <legend className="px-2 font-bold text-ink">Food preferences</legend>
+                <legend className="px-2 font-bold text-ink"><span className="inline-flex items-center gap-2"><Utensils size={18}/>Food preferences</span></legend>
               <fieldset className="flex flex-wrap gap-x-5 gap-y-1">
                 <legend className="mb-1 text-sm font-medium">Basic dietary types</legend>
                 <label className="flex min-h-11 items-center gap-3">
@@ -305,7 +317,7 @@ export default function CapacitySettingsPage() {
                   {clientError}
                 </p>
               ) : null}
-              {serverError ? (
+              {!clientError && serverError ? (
                 <p role="alert" className="text-sm text-red-700">
                   {serverError}
                 </p>
@@ -315,6 +327,7 @@ export default function CapacitySettingsPage() {
               </p>
 
               <Button type="submit" variant="primary" disabled={saveMutation.isPending}>
+                <Save size={18}/>
                 {saveMutation.isPending ? "Saving..." : "Save capacity settings"}
               </Button>
             </form>

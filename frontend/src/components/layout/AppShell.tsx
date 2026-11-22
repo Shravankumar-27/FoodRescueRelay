@@ -3,7 +3,8 @@ import { apiRequest } from "../../lib/api";
 import type { InboxItem } from "../../pages/MessagesPage";
 import type { Contribution } from "../../types/contribution";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import BackButton from "../ui/BackButton";
 import {
   Home,
   MessageCircle,
@@ -74,9 +75,11 @@ export default function AppShell({
   children: ReactNode;
   backTo?: string;
 }) {
-  const { user, logout, token } = useAuth();
+  const { user, organization, logout, token } = useAuth();
   const navigate = useNavigate();
-  const contribution = useQuery({queryKey:["contribution",user?.id],queryFn:()=>apiRequest<Contribution>("/contribution",{token}),enabled:!!token&&user?.role!=="ADMIN",refetchInterval:15000});
+  const location = useLocation();
+  const home = `/${nav}`;
+  const contribution = useQuery({queryKey:["contribution",user?.id],queryFn:()=>apiRequest<Contribution>("/contribution",{token}),enabled:!!token&&user?.role==="DONOR",refetchInterval:15000});
   const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => apiRequest<InboxItem[]>("/partners/inbox", { token }), enabled: !!token && user?.role !== "ADMIN", refetchInterval: 10000 });
   const unread = (inbox.data ?? []).reduce((sum, item) => sum + item.unread, 0);
   const [online, setOnline] = useState<boolean>(() => navigator.onLine);
@@ -104,7 +107,7 @@ export default function AppShell({
     <nav
       aria-label="Main"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur-sm md:hidden"
+      className="border-t border-border bg-surface/95 backdrop-blur-sm md:hidden"
     >
       <div className="mx-auto flex max-w-5xl">
         {links.map((item) => (
@@ -161,7 +164,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background pb-36 md:pb-16">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:block focus:bg-white focus:p-3">Skip to content</a>
       {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
@@ -174,16 +177,7 @@ export default function AppShell({
           </Link>
 
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            {backTo && (
-              <button
-                type="button"
-                aria-label="Go back"
-                onClick={() => navigate(backTo)}
-                className="text-muted hover:text-ink text-sm"
-              >
-                ←
-              </button>
-            )}
+            {location.pathname.replace(/\/$/, "") !== home && <BackButton fallback={backTo ?? home}/>}
             <h1 className="truncate text-base font-semibold text-ink">{title}</h1>
           </div>
 
@@ -211,9 +205,9 @@ export default function AppShell({
               </span>
             )}
 
-            <span className="hidden text-sm text-muted sm:block">{user?.name ?? ""}</span>
+            <span className="hidden max-w-56 truncate text-sm text-muted sm:block" title={organization?.name}>{organization?.name ?? ""}</span>
 
-            {contribution.data&&<Link to="/contribution" aria-label={`${contribution.data.coins} kindness coins, view medals`} className="hidden min-h-11 items-center gap-1 rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-800 sm:inline-flex"><Coins size={15}/>{contribution.data.coins.toLocaleString("en-IN")}</Link>}
+            {user?.role === "DONOR" && contribution.data && <Link to="/contribution" aria-label={`${contribution.data.coins} kindness coins, view medals`} className="hidden min-h-11 items-center gap-1 rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-800 sm:inline-flex"><Coins size={15}/>{contribution.data.coins.toLocaleString("en-IN")}</Link>}
 
             {user?.role !== "ADMIN" && <Link to="/messages" aria-label={`Messages${unread ? `, ${unread} unread` : ""}`} className="relative flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:bg-primaryLight"><MessageCircle size={20}/>{unread > 0 && <span className="absolute right-0 top-0 rounded-full bg-urgent px-1.5 text-xs text-white">{unread}</span>}</Link>}
             <button
@@ -244,15 +238,17 @@ export default function AppShell({
         {desktopSidebar}
         <main id="main-content" className="min-w-0 flex-1">{children}</main>
       </div>
-      <footer className="border-t border-border bg-surface pb-24 md:pb-0">
+      <div className="fixed inset-x-0 bottom-0 z-30">
+      <footer className="border-t border-border bg-surface/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm">
-          <span className="font-semibold text-ink">RescueRelay</span>
+          <span className="font-semibold text-ink">RescueRelay <span className="hidden font-normal text-muted sm:inline">· Good food, shared locally.</span></span>
           <Link className="font-semibold text-primary hover:underline" to="/community/impact">Community impact</Link>
         </div>
       </footer>
 
       {/* Mobile bottom nav */}
       {bottomNav}
+      </div>
     </div>
   );
 }

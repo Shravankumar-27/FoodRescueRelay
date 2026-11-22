@@ -23,7 +23,7 @@ from app.models.receiver_capacity import ReceiverCapacity
 from app.models.rescue import Rescue
 from app.services import geo
 from app.services.rescue_helpers import ensure_utc
-from app.services.capacity_service import free_servings
+from app.services.capacity_service import reserved_servings_by_org
 
 WEIGHTS: dict[str, float] = {
     "proximity": 0.35,
@@ -217,7 +217,7 @@ def feasible_ranked(results: Sequence[CandidateResult]) -> list[CandidateResult]
 
 
 def load_candidates(db: Session, rescue: Rescue, now: datetime, receiver_id: uuid.UUID | None = None) -> list[CandidateInput]:
-    """Load receiver candidates and their 24h completed counts in two queries."""
+    """Load candidates, recent outcomes and reservations in three bounded queries."""
     query = (
         select(Organization, ReceiverCapacity)
         .join(ReceiverCapacity, ReceiverCapacity.organization_id == Organization.id)
@@ -229,11 +229,15 @@ def load_candidates(db: Session, rescue: Rescue, now: datetime, receiver_id: uui
     if receiver_id is not None:
         query = query.where(Organization.id == receiver_id)
     rows = db.execute(query).all()
+    org_ids = [org.id for org, _ in rows]
+    if not org_ids:
+        return []
+    reserved = reserved_servings_by_org(db, org_ids)
 
     since = ensure_utc(now) - RECENT_WINDOW
     count_rows = db.execute(
         select(ImpactRecord.receiver_organization_id, func.count(ImpactRecord.id))
-        .where(ImpactRecord.created_at >= since)
+        .where(ImpactRecord.created_at >= since, ImpactRecord.receiver_organization_id.in_(org_ids))
         .group_by(ImpactRecord.receiver_organization_id)
     ).all()
     recent_counts = {org_id: int(count) for org_id, count in count_rows}
@@ -249,7 +253,7 @@ def load_candidates(db: Session, rescue: Rescue, now: datetime, receiver_id: uui
                 longitude=org.longitude,
                 reliability=org.reliability,
                 available=capacity.available,
-                available_servings=free_servings(db, capacity),
+                available_servings=max(0, capacity.available_servings - reserved.get(org.id, 0)),
                 accepts_veg=capacity.accepts_veg,
                 accepts_non_veg=capacity.accepts_non_veg,
                 transport_available=capacity.transport_available,

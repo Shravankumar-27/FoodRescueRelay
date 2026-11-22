@@ -18,7 +18,7 @@ export default function AdminRescuesPage() {
   const { token } = useAuth();
   const [offset, setOffset] = useState(0);
 
-  const rescuesQuery = useQuery({
+  const rescuesQuery = useQuery({meta: { errorDisplay: "inline" }, 
     queryKey: ["admin", "rescues", offset],
     queryFn: () =>
       apiRequest<AdminRescue[]>(`/admin/rescues?limit=${PAGE_SIZE}&offset=${offset}`, {

@@ -10,7 +10,7 @@ from app.models.enums import OfferStatus
 from app.models.offer import MatchOffer
 
 API = "/api/v1"
-DEMO_PRIVATE_ADDRESS = "Demo venue address (synthetic)"
+DEMO_PRIVATE_ADDRESS = "12-3 Silicon Valley, Madhapur"
 
 
 def test_receiver_cannot_cancel_donor_rescue(

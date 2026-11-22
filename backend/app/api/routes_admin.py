@@ -17,7 +17,7 @@ from app.models.organization import Organization
 from app.models.rescue import Rescue
 from app.services.rescue_service import iso_utc
 from app.services.dispatch_service import advance_expired_offers
-from app.services.trust_service import compute_trust_scores, trust_details
+from app.services.trust_service import compute_trust_scores, trust_details_many
 from app.core.errors import AppError
 from app.models.enums import VerificationStatus
 from app.models.offer import MatchOffer
@@ -47,6 +47,7 @@ def list_organizations(
         .limit(limit)
         .offset(offset)
     ).all()
+    trust = trust_details_many(db, orgs)
     items = [
         {
             "id": str(org.id),
@@ -56,7 +57,7 @@ def list_organizations(
             "locality": org.locality,
             "reliability": org.reliability,
             "created_at": iso_utc(org.created_at),
-            **trust_details(db, org),
+            **trust[org.id],
         }
         for org in orgs
     ]

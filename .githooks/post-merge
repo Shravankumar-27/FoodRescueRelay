@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+sh "$(git rev-parse --show-toplevel)/.githooks/db-sync" hook pull

@@ -13,8 +13,9 @@ def reward_summary(db, user, organization):
     donor = user.organization_id if user.role == "DONOR" else None
     receiver = user.organization_id if user.role == "RECEIVER" else None
     now = utcnow()
-    rows = [r for r in _delivered_rows(db, donor, receiver) if r.servings > 0]
-    impact = impact_summary(db, donor, receiver, now)
+    delivered_rows = _delivered_rows(db, donor, receiver)
+    impact = impact_summary(db, donor, receiver, now, delivered_rows=delivered_rows)
+    rows = [r for r in delivered_rows if r.servings > 0]
     coins = sum(r.servings for r in rows) * COINS_PER_MEAL
     tier = max((t for t in TIERS if coins >= t[0]), key=lambda t: t[0])
     next_tier = next((t for t in TIERS if t[0] > coins), None)

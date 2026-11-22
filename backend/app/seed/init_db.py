@@ -8,6 +8,7 @@ All names, emails and contact details below are fictional.
 """
 
 import sys
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import or_, select, text
@@ -16,7 +17,7 @@ import app.models  # noqa: F401  - registers every model on Base.metadata
 from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.models import FoodItem, Organization, ReceiverCapacity, Rescue, StatusEvent, User
+from app.models import AllocationNotice, PartnerMessage, FoodItem, Organization, ReceiverCapacity, Rescue, StatusEvent, User
 from app.models.base_types import new_uuid
 from app.models.enums import (
     DietaryType,
@@ -32,7 +33,7 @@ from app.services.rescue_service import derive_dietary_type
 DEMO_PASSWORD = "demo123"
 
 # Marker for the demo rescue: a fixed display id and a fixed idempotency key.
-DEMO_RESCUE_DISPLAY_ID = "RR-DEMO0001"
+DEMO_RESCUE_DISPLAY_ID = "RR-10000001"
 DEMO_RESCUE_IDEMPOTENCY_KEY = "demo-seed-madhapur-v1"
 DEMO_RESCUE_DONOR = "Madhapur Grand Events"
 
@@ -45,7 +46,7 @@ _ORGANIZATIONS = [
         17.4483,
         78.3915,
         0.95,
-        "Demo venue address (synthetic)",
+        "12-3 Silicon Valley, Madhapur",
         "+910000000000",
     ),
     (
@@ -137,6 +138,8 @@ def _seed(session) -> None:
             session.add(org)
             session.flush()
         orgs_by_name[name] = org
+        if org.private_address == "Demo venue address (synthetic)":
+            org.private_address = address
 
     for name, (max_servings, need_level) in _CAPACITIES.items():
         org = orgs_by_name[name]
@@ -257,6 +260,24 @@ def seed_demo(session) -> None:
     """Idempotently create demo orgs, capacities, users and the demo rescue."""
     _seed(session)
     _seed_demo_rescue(session)
+    # Keep existing UUID links intact while upgrading old unreadable display codes.
+    from app.services.rescue_helpers import new_display_id
+    used = set(session.scalars(select(Rescue.display_id)))
+    for rescue in session.scalars(select(Rescue)):
+        if rescue.handling_notes and rescue.handling_notes.startswith("Synthetic QA listing."):
+            rescue.handling_notes = rescue.handling_notes.removeprefix("Synthetic QA listing.").strip() or None
+        if not rescue.display_id.removeprefix("RR-").isdigit():
+            candidate = new_display_id()
+            while candidate in used:
+                candidate = new_display_id()
+            rescue.display_id = candidate
+            used.add(candidate)
+    for message, rescue in session.execute(
+        select(PartnerMessage, Rescue).join(AllocationNotice, AllocationNotice.message_id == PartnerMessage.id)
+        .join(Rescue, Rescue.id == AllocationNotice.rescue_id)
+    ):
+        if message.message.startswith(("Split proposal for RR-", "Updated split proposal for RR-")):
+            message.message = re.sub(r"\bRR-[A-Z0-9]+\b", rescue.display_id, message.message, count=1)
     from app.services.trust_service import compute_trust_scores
     compute_trust_scores(session)
 

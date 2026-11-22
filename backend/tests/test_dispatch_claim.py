@@ -73,6 +73,21 @@ def test_timeout_sends_next_offer(create_rescue, db_session: Session) -> None:
     assert pending[0].receiver_organization_id == _org_id(db_session, CITYFOOD)
 
 
+def test_scoped_expiry_leaves_other_rescues_for_worker(create_rescue, db_session: Session) -> None:
+    from app.models.rescue import Rescue
+    first_id = uuid.UUID(create_rescue(uuid.uuid4().hex)["id"])
+    second_id = uuid.UUID(create_rescue(uuid.uuid4().hex)["id"])
+    future = datetime.now(timezone.utc) + timedelta(hours=2)
+    advance_expired_offers(db_session, now=future, rescue_id=first_id)
+    db_session.commit()
+    assert db_session.get(Rescue, first_id).status == "EXPIRED"
+    assert db_session.get(Rescue, second_id).status == "OFFERED"
+    advance_expired_offers(db_session, now=future)
+    db_session.commit()
+    db_session.expire_all()
+    assert db_session.get(Rescue, second_id).status == "EXPIRED"
+
+
 def test_no_candidates_left_moves_rescue_to_matching(
     create_rescue, client: TestClient, donor_headers, hope_headers, cityfood_headers, db_session: Session
 ) -> None:

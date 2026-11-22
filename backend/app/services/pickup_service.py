@@ -152,6 +152,6 @@ def deliver_rescue(
             raise
         return existing
     from app.services.trust_service import compute_trust_scores
-    compute_trust_scores(db)
+    compute_trust_scores(db, [rescue.donor_organization_id, receiver_user.organization_id])
     db.commit()
     return impact
