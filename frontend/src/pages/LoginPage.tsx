@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Utensils, LogIn, Eye, EyeOff, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Utensils, LogIn, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../features/auth/AuthContext";
@@ -97,73 +97,70 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4 py-10">
-        {/* Branding */}
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primaryLight">
-              <Utensils className="h-8 w-8 text-primary" />
+      <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 px-4 py-8 md:grid-cols-2 md:gap-0 md:px-8">
+        <section className="rounded-2xl border border-border bg-surface p-6 shadow-card md:rounded-r-none md:p-10">
+          <div className="mb-6">
+            <div className="mb-4 flex">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primaryLight">
+                <Utensils className="h-8 w-8 text-primary" />
+              </div>
             </div>
+            <h1 className="text-3xl font-bold text-ink">Sign in to RescueRelay</h1>
           </div>
-          <h1 className="text-2xl font-bold text-ink">Welcome back</h1>
-        </div>
 
-        {/* Login form */}
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4 rounded-card border border-border bg-surface p-6 shadow-card"
-        >
-          <Input
-            label="Email"
-            type="email"
-            autoComplete="username"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-          />
-
-          <div className="relative">
+          {/* Login form */}
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4"
+          >
             <Input
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
+              label="Email"
+              type="email"
+              autoComplete="username"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-9 text-muted hover:text-ink"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
 
-          <Button type="submit" size="lg" disabled={submitting}>
-            <LogIn className="h-4 w-4" />
-            {submitting ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
+            <div className="relative">
+              <Input
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                className="pr-12"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-1 top-7 grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-background hover:text-ink"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
 
-        {/* Demo accounts */}
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="h-px flex-1 bg-border" />
-            <p className="text-xs font-semibold text-muted">DEMO ACCOUNTS · password: demo123</p>
-            <div className="h-px flex-1 bg-border" />
-          </div>
+            <Button type="submit" size="lg" disabled={submitting}>
+              <LogIn className="h-4 w-4" />
+              {submitting ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        </section>
+        <section className="rounded-2xl border border-border bg-primaryLight p-6 md:rounded-l-none md:border-l-0 md:p-10" aria-labelledby="quick-access">
+          <h2 id="quick-access" className="text-xl font-bold text-primaryDark">Quick access</h2>
+          <p className="mb-4 mt-1 text-sm text-muted">Select an account to fill the sign-in form.</p>
           <div className="grid grid-cols-1 gap-2">
             {DEMO_ACCOUNTS.map((account) => (
               <button
                 key={account.email}
                 type="button"
-                className={`flex min-h-[44px] items-center gap-3 rounded-button border bg-surface px-3 text-left transition-all ${account.color}`}
+                className={`flex min-h-12 items-center gap-3 rounded-xl border bg-surface px-3 text-left transition-all ${account.color}`}
                 onClick={() => fillDemo(account.email)}
               >
-                <span className="inline-flex rounded-full bg-background px-2 py-0.5 text-xs font-semibold text-muted">
+                <span className="inline-flex w-14 shrink-0 justify-center rounded-full bg-background px-2 py-0.5 text-xs font-semibold text-muted">
                   {account.label}
                 </span>
                 <span className="text-sm font-medium text-ink">{account.role}</span>
@@ -172,9 +169,6 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <p className="text-center text-xs text-muted">
-          <ShieldCheck className="mr-1.5 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Sample data only. No real personal information.
-        </p>
       </div>
     </div>
   );

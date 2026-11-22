@@ -2,7 +2,7 @@ import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, ThumbsUp, AlertTriangle, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
 import HandlingIcon from "../../components/ui/HandlingIcon";
 import AppShell from "../../components/layout/AppShell";
 import Button from "../../components/ui/Button";
@@ -24,7 +24,7 @@ type FoodRow = {
 
 type Draft = {
   rows: FoodRow[];
-  untouched: "" | "yes" | "no";
+  untouched: "" | "yes";
   holding: string;
   notes: string;
   prepared: string;
@@ -244,7 +244,7 @@ export default function CreateRescuePage() {
   );
   const [foodErrs, setFoodErrs] = useState<Record<number, FoodErr>>({});
 
-  const [untouched, setUntouched] = useState<"" | "yes" | "no">(draft?.untouched ?? "");
+  const [untouched, setUntouched] = useState<"" | "yes">(draft?.untouched === "yes" ? "yes" : "");
   const [holding, setHolding] = useState<string>(draft?.holding ?? "");
   const [notes, setNotes] = useState<string>(draft?.notes ?? "");
   const [handErrs, setHandErrs] = useState<Record<string, string>>({});
@@ -322,7 +322,7 @@ export default function CreateRescuePage() {
         allergen_info_unknown: r.allergen_info_unknown,
       })),
       untouched_confirmed: untouched === "yes",
-      served_or_mixed_with_waste: untouched === "no",
+      served_or_mixed_with_waste: false,
       handling_type: holding,
       handling_notes: notes.trim() || null,
       prepared_at: toIso(prepared),
@@ -373,7 +373,6 @@ export default function CreateRescuePage() {
     create.mutate();
   }
 
-  const blocked = untouched === "no";
 
   return (
     <AppShell title="Post surplus" nav="donor">
@@ -541,48 +540,16 @@ export default function CreateRescuePage() {
         {/* ── STEP 2: Handling ── */}
         {step === 2 && (
           <section className="flex flex-col gap-6" aria-label="Handling">
-            {/* Untouched question */}
-            <fieldset className="flex flex-col gap-3">
-              <legend className="mb-1 font-semibold text-ink">
-                Was this food untouched and not served to guests?
-              </legend>
-              {[
-                { value: "yes" as const, label: "Yes, untouched", desc: "Food was never served or mixed with waste", icon: <ThumbsUp className="h-5 w-5 text-fresh" /> },
-                { value: "no" as const, label: "No, it was served or mixed", desc: "This food cannot be redistributed", icon: <AlertTriangle className="h-5 w-5 text-urgent" /> },
-              ].map((o) => (
-                <label
-                  key={o.value}
-                  className={`flex min-h-[60px] cursor-pointer items-center gap-4 rounded-2xl border p-4 transition-colors ${untouched === o.value
-                      ? o.value === "yes"
-                        ? "border-fresh bg-fresh/5"
-                        : "border-urgent bg-urgent/5"
-                      : "border-border bg-surface hover:border-primary/50"
-                    }`}
-                >
-                  <input
-                    type="radio"
-                    name="untouched"
-                    value={o.value}
-                    checked={untouched === o.value}
-                    onChange={() => { setUntouched(o.value); setHandErrs({}); }}
-                    className="sr-only"
-                  />
-                  {o.icon}
-                  <div>
-                    <p className="font-medium text-ink">{o.label}</p>
-                    <p className="text-xs text-muted">{o.desc}</p>
-                  </div>
-                </label>
-              ))}
-              {handErrs.untouched && <p className="text-sm text-urgent">{handErrs.untouched}</p>}
-            </fieldset>
-
-            {blocked && (
-              <div role="alert" className="rounded-xl border border-urgent/30 bg-urgent/5 p-4 text-urgent">
-                <p className="font-semibold">Can't post this listing</p>
-                <p className="text-sm mt-1">RescueRelay can only redistribute untouched food that hasn't been served to guests.</p>
-              </div>
-            )}
+            <div>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-surface p-4 text-sm font-semibold">
+                <input type="checkbox" checked={untouched === "yes"} onChange={event => {
+                  setUntouched(event.target.checked ? "yes" : "");
+                  setHandErrs(current => ({ ...current, untouched: "" }));
+                }}/>
+                I confirm the food was never served or mixed with waste.
+              </label>
+              {handErrs.untouched && <p className="mt-2 text-sm text-urgent">{handErrs.untouched}</p>}
+            </div>
 
             {/* Handling type — visual radio cards */}
             <fieldset className="flex flex-col gap-3">
@@ -768,7 +735,6 @@ export default function CreateRescuePage() {
               variant="primary"
               className="min-h-[44px] flex items-center gap-1"
               onClick={nextFromHandling}
-              disabled={blocked}
             >
               Next <ChevronRight className="h-4 w-4" />
             </Button>

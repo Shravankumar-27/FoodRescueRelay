@@ -161,7 +161,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:block focus:bg-white focus:p-3">Skip to content</a>
       {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
@@ -240,10 +240,16 @@ export default function AppShell({
       )}
 
       {/* Main layout: sidebar on desktop, full-width on mobile */}
-      <div className="mx-auto flex max-w-[1440px] gap-6 px-4 pt-4 pb-28 md:pb-6">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-1 gap-6 px-4 py-4 md:pb-6">
         {desktopSidebar}
-        <main id="main-content" className="min-w-0 flex-1">{children}<footer className="mt-6 border-t border-border pt-4 text-sm text-muted">Hyderabad demo · Synthetic organizations and locations. RescueRelay coordinates food donations; it does not certify food safety. <Link className="text-primary underline" to="/community/impact">Community impact</Link></footer></main>
+        <main id="main-content" className="min-w-0 flex-1">{children}</main>
       </div>
+      <footer className="border-t border-border bg-surface pb-24 md:pb-0">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm">
+          <span className="font-semibold text-ink">RescueRelay</span>
+          <Link className="font-semibold text-primary hover:underline" to="/community/impact">Community impact</Link>
+        </div>
+      </footer>
 
       {/* Mobile bottom nav */}
       {bottomNav}

@@ -39,7 +39,7 @@ services:
       args:
         VITE_API_BASE_URL: /api/v1
     environment:
-      RESCUERELAY_API_TARGET: http://backend:8000
+      RESCUERELAY_API_TARGET: ${RESCUERELAY_API_TARGET:-http://backend:8000}
     ports:
       - "5173:5173"
     depends_on:

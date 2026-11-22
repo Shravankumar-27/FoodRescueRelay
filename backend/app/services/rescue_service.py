@@ -26,10 +26,7 @@ from app.services.status import transition_rescue
 
 logger = logging.getLogger(__name__)
 
-SAFETY_NOTICE = (
-    "Handling information provided by donor. Receiver must independently verify "
-    "suitability before accepting or distributing the food."
-)
+SAFETY_NOTICE = "Check storage, packaging, and allergens before pickup."
 ALLERGEN_NOTICE = (
     "Allergen information unavailable. Receiver must independently assess suitability."
 )

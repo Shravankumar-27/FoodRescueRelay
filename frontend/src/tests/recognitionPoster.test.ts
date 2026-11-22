@@ -10,7 +10,7 @@ describe("appreciation artwork",()=>{
     expect(svg).toContain("&lt;script&gt;");
     expect(svg).toContain("Kitchen &amp; Community");
     expect(svg).not.toContain("<image");
-    expect(svg).toContain("SYNTHETIC DEMO");
+    expect(svg).toContain("RESCUERELAY · CONTRIBUTION RECOGNITION");
   });
   it("does not equate servings to people or invent a rating",()=>{
     const svg=recognitionPosterSvg(record,"midnight","https://example.test");

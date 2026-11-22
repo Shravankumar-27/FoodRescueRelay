@@ -13,7 +13,7 @@ def test_demo_seed_creates_ranked_deliveries_and_appreciation_without_duplicates
     db_session.commit()
     models = (Rescue, ImpactRecord, Handoff, DonationRecognition, MealFeedback)
     counts = [db_session.scalar(select(func.count()).select_from(model)) for model in models]
-    assert counts == [35, 23, 24, 23, 23]
+    assert counts == [43, 31, 32, 31, 31]
     seed_extended(db_session)
     db_session.commit()
     assert [db_session.scalar(select(func.count()).select_from(model)) for model in models] == counts
@@ -21,6 +21,11 @@ def test_demo_seed_creates_ranked_deliveries_and_appreciation_without_duplicates
     for group in ("donors", "receivers"):
         assert rankings[group][0]["meals"] > 0
         assert rankings[group][0]["kindness_coins"] == rankings[group][0]["meals"] * 10
+    donors_by_locality = {}
+    for donor in rankings["donors"]:
+        donors_by_locality.setdefault(donor["locality"], []).append(donor)
+    assert len(donors_by_locality) == 8
+    assert all(len(donors) >= 2 for donors in donors_by_locality.values())
     feedback = client.get(f"{API}/impact/meal-insights", headers=donor_headers).json()["data"]
     assert feedback["responses"] >= 3 and feedback["averages"]["taste"] > 0
 

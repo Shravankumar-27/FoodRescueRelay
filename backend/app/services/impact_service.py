@@ -115,7 +115,7 @@ def impact_summary(
     return {
         "reported_people_served": sum(row.people_served for row in people_rows),
         "people_counted_deliveries": len(people_rows),
-        "people_count_note": "Receiver-reported recipients per delivery, not deduplicated across donations. Meals are servings, not a count of unique people.",
+        "people_count_note": "Receiving partners report people served for each delivery.",
         "food_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,
         "food_rating_count": len(ratings),
         "recognition_count": sum(row.recognition_token is not None for row in rows),

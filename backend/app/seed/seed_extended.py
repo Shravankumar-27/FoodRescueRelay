@@ -44,6 +44,14 @@ _DONOR_ORGS = [
     ("Gachibowli Events Hub",    "Gachibowli, Hyderabad",       17.4400, 78.3489, 0.87, "Financial District, Gachibowli", "+919000000006"),
     ("Kukatpally Wedding Hall",  "Kukatpally, Hyderabad",       17.4949, 78.3996, 0.82, "KPHB Phase 1, Kukatpally",    "+919000000007"),
     ("Secunderabad Palace Catr.","Secunderabad, Hyderabad",     17.4474, 78.4985, 0.91, "MG Road, Secunderabad",       "+919000000008"),
+    ("Lakeview Kitchen", "Madhapur, Hyderabad", 17.4502, 78.389, 0.88, None, None),
+    ("Hillcrest Cafe", "Jubilee Hills, Hyderabad", 17.4301, 78.4102, 0.87, None, None),
+    ("Silicon Square Kitchen", "Hitech City, Hyderabad", 17.448, 78.3774, 0.9, None, None),
+    ("Banjara Table", "Banjara Hills, Hyderabad", 17.4171, 78.4387, 0.91, None, None),
+    ("Botanical Kitchen", "Kondapur, Hyderabad", 17.467, 78.3618, 0.86, None, None),
+    ("Greenwood Banquets", "Gachibowli, Hyderabad", 17.4372, 78.3559, 0.87, None, None),
+    ("Westline Bakers", "Kukatpally, Hyderabad", 17.5, 78.4015, 0.84, None, None),
+    ("Clocktower Kitchen", "Secunderabad, Hyderabad", 17.4438, 78.4939, 0.89, None, None),
 ]
 
 # Receivers: NGOs, shelters, community kitchens
@@ -69,7 +77,7 @@ _ADMIN_ORG = ("RescueRelay Admin", "Hyderabad", 17.385, 78.4867)
 
 # (email, org_name, role, display_name)
 _DONOR_USERS = [
-    ("donor@rescuerelay.demo",       "Madhapur Grand Events",    UserRole.DONOR.value,  "Demo Donor"),
+    ("donor@rescuerelay.demo",       "Madhapur Grand Events",    UserRole.DONOR.value,  "Arjun Reddy"),
     ("jubilee@rescuerelay.demo",     "Jubilee Hills Caterers",   UserRole.DONOR.value,  "Priya Reddy"),
     ("hitech@rescuerelay.demo",      "Hitech Banquets & Events", UserRole.DONOR.value,  "Suresh Kumar"),
     ("banjara@rescuerelay.demo",     "Banjara Feasts",           UserRole.DONOR.value,  "Ravi Sharma"),
@@ -77,9 +85,9 @@ _DONOR_USERS = [
 ]
 
 _RECEIVER_USERS = [
-    ("hope@rescuerelay.demo",       "Hope Community Kitchen",   UserRole.RECEIVER.value, "Hope Demo"),
-    ("shelter@rescuerelay.demo",    "ShelterServe",             UserRole.RECEIVER.value, "Shelter Demo"),
-    ("cityfood@rescuerelay.demo",   "City Food Relief",         UserRole.RECEIVER.value, "City Food Demo"),
+    ("hope@rescuerelay.demo",       "Hope Community Kitchen",   UserRole.RECEIVER.value, "Kavya Sharma"),
+    ("shelter@rescuerelay.demo",    "ShelterServe",             UserRole.RECEIVER.value, "Anjali Rao"),
+    ("cityfood@rescuerelay.demo",   "City Food Relief",         UserRole.RECEIVER.value, "Nikhil Varma"),
     ("sunrise@rescuerelay.demo",    "Sunrise NGO",              UserRole.RECEIVER.value, "Meena Krishnan"),
     ("helping@rescuerelay.demo",    "Helping Hands",            UserRole.RECEIVER.value, "Ramesh Nair"),
     ("green@rescuerelay.demo",      "Green Table Kitchen",      UserRole.RECEIVER.value, "Deepa Rao"),
@@ -87,7 +95,7 @@ _RECEIVER_USERS = [
     ("roti@rescuerelay.demo",       "Roti Bank Hyderabad",      UserRole.RECEIVER.value, "Vinod Mehta"),
 ]
 
-_ADMIN_USER = ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Demo Admin")
+_ADMIN_USER = ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Aditi Mehta")
 
 # Food templates (name, dietary, allergens)
 _FOOD_TEMPLATES = [
@@ -368,9 +376,7 @@ def seed_extended(session) -> None:
 
     session.flush()
 
-    # Historical rescues — only add if fewer than 15 exist (idempotency)
-
-    # Historical rescues spanning four weeks.
+    # Historical rescues spanning four weeks. Append entries to preserve existing IDs.
     history = [
         # (days_ago, status, food_idx, donor_idx, receiver_idx, qty)
         (28, RescueStatus.DELIVERED.value, 0, 0, 0, 100),
@@ -403,6 +409,14 @@ def seed_extended(session) -> None:
         (1.5,RescueStatus.DELIVERED.value, 12, 0, 3, 100),
         (1,  RescueStatus.DELIVERED.value, 13, 1, 4, 75),
         (0.5,RescueStatus.DELIVERED.value, 14, 2, 5, 90),
+        (27, RescueStatus.DELIVERED.value, 0, 8, 0, 72),
+        (25, RescueStatus.DELIVERED.value, 7, 9, 3, 56),
+        (21, RescueStatus.DELIVERED.value, 6, 10, 2, 94),
+        (17, RescueStatus.DELIVERED.value, 9, 11, 4, 63),
+        (13, RescueStatus.DELIVERED.value, 4, 12, 1, 54),
+        (9, RescueStatus.DELIVERED.value, 3, 13, 5, 88),
+        (5, RescueStatus.DELIVERED.value, 1, 14, 6, 44),
+        (2, RescueStatus.DELIVERED.value, 12, 15, 7, 68),
     ]
 
     rng = Random(42)

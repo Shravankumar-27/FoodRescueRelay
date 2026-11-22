@@ -10,19 +10,15 @@ import ChatBox from "../../components/chat/ChatBox";
 import MatchExplanation from "../../components/rescue/MatchExplanation";
 import AllocationPuzzle from "../../components/rescue/AllocationPuzzle";
 import PickupLogistics from "../../components/rescue/PickupLogistics";
-import PartnerRating from "../../components/rescue/PartnerRating";
-import RecognitionCard from "../../components/rescue/RecognitionCard";
 import RescueClock from "../../components/rescue/RescueClock";
 import StatusBadge from "../../components/rescue/StatusBadge";
 import StatusTimeline from "../../components/rescue/StatusTimeline";
-import HowWeCalculate from "../../components/impact/HowWeCalculate";
-import ImpactMetric from "../../components/impact/ImpactMetric";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useToast } from "../../features/toast/ToastContext";
 import { pollInterval } from "../../hooks/usePolling";
-import { apiRequest } from "../../lib/api";
+import { ApiError, apiRequest } from "../../lib/api";
 import { foodLabel } from "../../lib/food";
-import { formatDateTime, formatMinutes } from "../../lib/format";
+import { formatDateTime } from "../../lib/format";
 import type { MatchCandidate, RescueDetail } from "../../types/api";
 
 const MATCHABLE = ["POSTED", "MATCHING", "OFFERED"];
@@ -45,6 +41,7 @@ export default function ActiveRescuePage() {
   });
   const d = rescue.data;
   const status = d?.status;
+  const notFound = rescue.error instanceof ApiError && rescue.error.status === 404;
   const matchable = !!status && MATCHABLE.includes(status);
   const cancellable = matchable || status === "CLAIMED";
   const matches = useQuery({
@@ -95,7 +92,10 @@ export default function ActiveRescuePage() {
   return <AppShell title="Rescue" nav="donor" backTo="/donor">
     <div className="space-y-4">
       {rescue.isPending && <Skeleton className="h-64 w-full"/>}
-      {rescue.isError && <Button variant="secondary" onClick={() => void rescue.refetch()}>Retry rescue</Button>}
+      {notFound ? <Card>
+        <h2 className="font-semibold">Rescue unavailable</h2>
+        <Link className="mt-3 inline-block text-sm font-semibold text-primary underline" to="/donor/rescues">View rescue history</Link>
+      </Card> : rescue.isError && <Button variant="secondary" onClick={() => void rescue.refetch()}>Retry rescue</Button>}
       {d && <>
         <Card className={`overflow-hidden border-t-4 ${cancellable ? urgency : "border-t-primary"}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -125,7 +125,7 @@ export default function ActiveRescuePage() {
           <p className="mt-1 text-sm">{release.reason?.slice("receiver_released: ".length)}</p>
         </Card>}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card className="min-w-0">
             <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Utensils size={18} className="text-primary"/>Food and handling</h3>
             <ul className="divide-y divide-border">
@@ -142,7 +142,6 @@ export default function ActiveRescuePage() {
               <p className="flex items-center gap-2 font-semibold"><Package size={16} className="text-primary"/>{foodLabel(d.handling_type)}</p>
               {d.handling_notes && <p className="mt-1 text-muted">{d.handling_notes}</p>}
             </div>
-            {d.safety_notice && <p className="mt-3 text-xs text-muted">{d.safety_notice}</p>}
           </Card>
 
           {matchable ? <AllocationPuzzle key={id} rescueId={id}>
@@ -172,14 +171,12 @@ export default function ActiveRescuePage() {
             {needsRetry && <Button className="mt-3" variant="secondary" disabled={dispatch.isPending} onClick={() => dispatch.mutate()}>Retry matching</Button>}
             </div>
           </AllocationPuzzle> : status === "DELIVERED" ? <Card className="min-w-0">
-            <h3 className="mb-3 text-base font-semibold">Delivery impact</h3>
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-background p-3 sm:grid-cols-3">
-              <ImpactMetric label="Meals rescued" value={String(d.impact?.delivered_servings ?? 0)}/>
-              <ImpactMetric label="Rejected servings" value={String(d.impact?.rejected_servings ?? 0)}/>
-              <ImpactMetric label="Completion time" value={d.impact?.minutes_to_delivery == null ? "—" : formatMinutes(d.impact.minutes_to_delivery)}/>
-            </div>
-            {!!d.impact?.delivered_servings && <p className="my-3 text-sm text-muted">Estimated {(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided</p>}
-            <HowWeCalculate/>
+            <h3 className="text-base font-semibold">Delivery impact</h3>
+            {d.impact?.delivered_servings != null && (
+              <p className="mt-3 rounded-xl bg-primaryLight p-4 text-lg font-bold text-primaryDark">
+                Estimated {(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided
+              </p>
+            )}
           </Card> : <Card className="min-w-0">
             <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Handshake size={18} className="text-primary"/>Pickup</h3>
             {d.claimed_receiver && <div className="rounded-xl bg-background p-3">
@@ -200,10 +197,6 @@ export default function ActiveRescuePage() {
         </div>
 
         {status === "CLAIMED" && <PickupLogistics rescueId={id} side="donor"/>}
-        {status === "DELIVERED" && <div className="grid gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
-          <RecognitionCard rescueId={id} delivered={d.impact?.delivered_servings ?? 0}/>
-          <PartnerRating rescueId={id}/>
-        </div>}
         {d.claimed_receiver && ["CLAIMED", "COLLECTED", "DELIVERED"].includes(d.status) &&
           <ChatBox rescueId={id} recipientName={d.claimed_receiver.name ?? "Receiver"}/>}
 

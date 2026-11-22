@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, Send, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { MessageSquare, Send, ChevronDown, ChevronUp } from "lucide-react";
 import Button from "../ui/Button";
 import { useAuth } from "../../features/auth/AuthContext";
 import { apiRequest } from "../../lib/api";
@@ -13,15 +13,17 @@ interface ChatBoxProps {
   partnerId?: string;
   recipientName?: string;
   defaultOpen?: boolean;
+  headerAction?: ReactNode;
 }
 
-export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpen = false }: ChatBoxProps) {
+export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpen = false, headerAction }: ChatBoxProps) {
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const endpoint = partnerId ? `/partners/${partnerId}/chat` : `/rescues/${rescueId}/chat`;
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(defaultOpen);
+  const isOpen = !!partnerId || expanded;
   const [messageText, setMessageText] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const chatQuery = useQuery({
     queryKey: ["chat", partnerId ?? rescueId],
@@ -46,7 +48,8 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
 
   useEffect(() => {
     if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const log = logRef.current;
+      if (log) log.scrollTop = log.scrollHeight;
     }
   }, [chatQuery.data?.messages, isOpen]);
 
@@ -69,51 +72,31 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
     sendMutation.mutate(suggestion);
   }
 
-  return (
-    <div className="rounded-2xl border border-primary/20 bg-surface shadow-card overflow-hidden">
-      {/* Header bar / Toggle */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3.5 bg-primaryLight/40 hover:bg-primaryLight/70 transition-colors text-left"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
-            <MessageSquare className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 font-bold text-sm text-ink">
-              <span>Chat with {recipientName ?? chatQuery.data?.partner_name ?? "partner"}</span>
-              {messages.length > 0 && (
-                <span className="rounded-full bg-primary text-white text-xs font-bold px-1.5 py-0.2">
-                  {messages.length}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted">Coordinate handoff & live timing</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-          <span>{isOpen ? "Collapse" : "Open Chat"}</span>
-          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </div>
-      </button>
+  const partner = recipientName ?? chatQuery.data?.partner_name ?? "Partner";
+  const title = <span className="flex min-w-0 items-center gap-3">
+    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primaryLight text-primary">
+      <MessageSquare size={18} aria-hidden="true"/>
+    </span>
+    <span className="min-w-0 break-words text-sm font-bold">{partnerId ? partner : "Messages with " + partner}</span>
+  </span>;
 
-      {/* Collapsible Chat Body */}
+  return (
+    <section aria-label="Messages" className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+      {partnerId ? <header className="flex min-h-16 items-center justify-between gap-3 px-4">
+        {title}{headerAction}
+      </header> : <button type="button" onClick={() => setExpanded(open => !open)} aria-expanded={isOpen}
+        className="flex min-h-16 w-full items-center justify-between gap-3 px-4 text-left hover:bg-background">
+        {title}{isOpen ? <ChevronUp size={18} className="shrink-0"/> : <ChevronDown size={18} className="shrink-0"/>}
+      </button>}
       {isOpen && (
-        <div className="p-3.5 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 border-t border-border p-3 sm:p-4">
           {chatQuery.isError && <Button variant="secondary" size="sm" onClick={() => void chatQuery.refetch()}>Retry messages</Button>}
           {/* Messages list */}
-          <div role="log" aria-live="polite" className="max-h-56 min-h-24 overflow-y-auto flex flex-col gap-2 p-1 rounded-xl bg-background border border-border/60">
+          <div role="log" aria-live="polite" ref={logRef} className={partnerId ? "flex h-80 flex-col gap-3 overflow-y-auto rounded-xl bg-background p-3" : "flex h-52 flex-col gap-3 overflow-y-auto rounded-xl bg-background p-3"}>
             {chatQuery.isLoading ? (
               <p className="text-xs text-muted text-center py-4">Loading messages...</p>
             ) : messages.length === 0 ? (
-              <div className="text-center py-6 px-4">
-                <p className="text-xs font-semibold text-ink">No messages yet</p>
-                <p className="text-xs text-muted mt-0.5">
-                  Send a quick update or choose a suggested message below.
-                </p>
-              </div>
+              <p className="m-auto text-sm text-muted">No messages yet</p>
             ) : (
               messages.map((m) => {
                 const isMe = m.sender_role === user?.role;
@@ -151,16 +134,11 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
                 );
               })
             )}
-            <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Suggestions Chips */}
-          <div>
-            <div className="flex items-center gap-1 text-xs font-semibold text-muted mb-1.5">
-              <Sparkles className="h-3 w-3 text-accent" />
-              <span>Suggested quick messages:</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-primary">Quick replies</summary>
+            <div className="mt-2 flex flex-wrap gap-2">
               {suggested.map((s) => (
                 <button
                   key={s}
@@ -173,17 +151,17 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
                 </button>
               ))}
             </div>
-          </div>
+          </details>
 
           {/* Input form */}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               aria-label="Message"
               type="text"
-              placeholder="Type message..."
+              placeholder="Write a message"
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
               maxLength={500}
             />
             <Button
@@ -192,13 +170,13 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
               size="sm"
               variant="primary"
               disabled={!messageText.trim() || sendMutation.isPending}
-              className="px-3 min-h-[36px]"
+              className="min-h-11 px-3"
             >
               <Send className="h-3.5 w-3.5" />
             </Button>
           </form>
         </div>
       )}
-    </div>
+    </section>
   );
 }

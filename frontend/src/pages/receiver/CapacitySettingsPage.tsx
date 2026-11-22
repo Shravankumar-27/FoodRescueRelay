@@ -169,6 +169,8 @@ export default function CapacitySettingsPage() {
         ) : form ? (
           <Card>
             <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+              <fieldset className="rounded-xl border border-border p-4">
+                <legend className="px-2 font-bold text-ink">Availability and capacity</legend>
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
@@ -176,9 +178,10 @@ export default function CapacitySettingsPage() {
                   checked={form.available}
                   onChange={(e) => update("available", e.target.checked)}
                 />
-                <span className="text-base">Available tonight</span>
+                <span className="text-base">Available for pickups</span>
               </label>
 
+                <div className="grid gap-4 sm:grid-cols-3">
               <Input
                 label="Maximum servings"
                 name="max_servings"
@@ -190,57 +193,15 @@ export default function CapacitySettingsPage() {
               />
 
               <Input
-                label="Servings available now"
+                label="Servings you can accept now"
                 name="available_servings"
                 type="number"
                 inputMode="numeric"
                 min={0}
-                hint="Must be less than or equal to maximum servings."
+                hint="Up to your maximum."
                 value={form.available_servings}
                 onChange={(e) => update("available_servings", e.target.value)}
               />
-
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm font-medium">Dietary types you accept</legend>
-                <label className="flex min-h-11 items-center gap-3">
-                  <input
-                    type="checkbox"
-                    className="h-6 w-6"
-                    checked={form.accepts_veg}
-                    onChange={(e) => update("accepts_veg", e.target.checked)}
-                  />
-                  <span>Vegetarian</span>
-                </label>
-                <label className="flex min-h-11 items-center gap-3">
-                  <input
-                    type="checkbox"
-                    className="h-6 w-6"
-                    checked={form.accepts_non_veg}
-                    onChange={(e) => update("accepts_non_veg", e.target.checked)}
-                  />
-                  <span>Non-vegetarian</span>
-                </label>
-              </fieldset>
-
-              <label className="flex min-h-11 items-center gap-3">
-                <input
-                  type="checkbox"
-                  className="h-6 w-6"
-                  checked={form.transport_available}
-                  onChange={(e) => update("transport_available", e.target.checked)}
-                />
-                <span>I have transport available</span>
-              </label>
-              <label className="flex min-h-11 items-center gap-3">
-                <input type="checkbox" checked={form.containers_available} onChange={event => update("containers_available", event.target.checked)}/>
-                Our team can provide containers
-              </label>
-              <label className="flex min-h-11 items-center gap-3">
-                <input type="checkbox" checked={form.refrigeration_available} onChange={event => update("refrigeration_available", event.target.checked)}/>
-                Refrigerated storage is available
-              </label>
-              <Input label="Volunteer capacity (servings)" type="number" min={0} max={100000} value={form.volunteer_servings}
-                onChange={event => update("volunteer_servings", event.target.value)} hint="Leave blank to use your available servings."/>
 
               <div className="flex flex-col gap-1">
                 <label htmlFor="need_level" className="text-sm font-medium">
@@ -261,10 +222,84 @@ export default function CapacitySettingsPage() {
                 </select>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">{([{key:"accepted_dietary_types",label:"Accepted dietary labels",options:DIETS},{key:"accepted_food_categories",label:"Accepted food categories",options:CATEGORIES}] as const).map(group => <fieldset key={group.key}><legend className="font-semibold">{group.label}</legend><p className="my-2 text-sm text-muted">Leave empty to allow all within your vegetarian/non-vegetarian preference. Selecting labels requires every item to match.</p><div className="flex flex-wrap gap-2">{group.options.map(value => <label key={value} className={`flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm ${form[group.key].includes(value) ? "border-primary bg-primaryLight" : "border-border"}`}><input type="checkbox" checked={form[group.key].includes(value)} onChange={e => update(group.key, e.target.checked ? [...form[group.key],value] : form[group.key].filter(v => v !== value))}/>{foodLabel(value)}</label>)}</div></fieldset>)}</div>
+                </div>
+              </fieldset>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <fieldset className="space-y-3 rounded-xl border border-border p-4">
+                  <legend className="px-2 font-bold text-ink">Pickup and storage</legend>
+              <label className="flex min-h-11 items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="h-6 w-6"
+                  checked={form.transport_available}
+                  onChange={(e) => update("transport_available", e.target.checked)}
+                />
+                <span>I have transport available</span>
+              </label>
+              <label className="flex min-h-11 items-center gap-3">
+                <input type="checkbox" checked={form.containers_available} onChange={event => update("containers_available", event.target.checked)}/>
+                Our team can provide containers
+              </label>
+              <label className="flex min-h-11 items-center gap-3">
+                <input type="checkbox" checked={form.refrigeration_available} onChange={event => update("refrigeration_available", event.target.checked)}/>
+                Refrigerated storage is available
+              </label>
+              <Input label="Volunteer capacity (servings)" type="number" min={0} max={100000} value={form.volunteer_servings}
+                onChange={event => update("volunteer_servings", event.target.value)} hint="Leave blank to use your available servings."/>
+
+                </fieldset>
+                <fieldset className="space-y-3 rounded-xl border border-border p-4">
+                  <legend className="px-2 font-bold text-ink">Organization profile</legend>
+                  <Input label="About your organization" maxLength={500} value={form.description}
+                    onChange={event => update("description", event.target.value)}/>
+                </fieldset>
+              </div>
+              <fieldset className="space-y-4 rounded-xl border border-border p-4">
+                <legend className="px-2 font-bold text-ink">Food preferences</legend>
+              <fieldset className="flex flex-wrap gap-x-5 gap-y-1">
+                <legend className="mb-1 text-sm font-medium">Basic dietary types</legend>
+                <label className="flex min-h-11 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-6 w-6"
+                    checked={form.accepts_veg}
+                    onChange={(e) => update("accepts_veg", e.target.checked)}
+                  />
+                  <span>Vegetarian</span>
+                </label>
+                <label className="flex min-h-11 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-6 w-6"
+                    checked={form.accepts_non_veg}
+                    onChange={(e) => update("accepts_non_veg", e.target.checked)}
+                  />
+                  <span>Non-vegetarian</span>
+                </label>
+              </fieldset>
+
+                <p className="text-sm text-muted">Leave labels or categories empty to accept all compatible options. Selected filters apply to every item.</p>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {([
+                    { key: "accepted_dietary_types", label: "Dietary labels", options: DIETS },
+                    { key: "accepted_food_categories", label: "Food categories", options: CATEGORIES },
+                  ] as const).map(group => <fieldset key={group.key}>
+                    <legend className="mb-2 font-semibold">{group.label}</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {group.options.map(value => <label key={value} className={
+                        "flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm " +
+                        (form[group.key].includes(value) ? "border-primary bg-primaryLight" : "border-border")
+                      }>
+                        <input type="checkbox" checked={form[group.key].includes(value)}
+                          onChange={event => update(group.key, event.target.checked
+                            ? [...form[group.key], value] : form[group.key].filter(option => option !== value))}/>
+                        {foodLabel(value)}
+                      </label>)}
+                    </div>
+                  </fieldset>)}
+                </div>
               <Input label="Allergens to exclude" hint="Comma-separated, e.g. dairy, peanuts. Unknown allergen information is excluded when restrictions are set." value={form.excluded_allergens} onChange={e => update("excluded_allergens",e.target.value)}/>
-              <Input label="About your organization" maxLength={500} hint="Describe community needs. Use synthetic details only; no personal information." value={form.description} onChange={e => update("description",e.target.value)}/>
-              <p className="text-sm text-muted">Dietary labels are donor-provided. Halal, gluten-free and diabetic-friendly labels do not establish vegetarian status or certify suitability. Confirm ingredients with the donor.</p>
+              </fieldset>
               {clientError ? (
                 <p role="alert" className="text-sm text-red-700">
                   {clientError}

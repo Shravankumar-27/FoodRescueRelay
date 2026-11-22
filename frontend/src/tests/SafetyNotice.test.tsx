@@ -9,7 +9,7 @@ describe("SafetyNotice", () => {
     render(<SafetyNotice />);
     expect(
       screen.getByText(
-        "Handling information provided by donor. Receiver must independently verify suitability before accepting or distributing the food.",
+        "Check storage, packaging, and allergens before pickup.",
       ),
     ).toBeInTheDocument();
   });

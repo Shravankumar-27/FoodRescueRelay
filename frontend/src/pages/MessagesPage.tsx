@@ -1,3 +1,4 @@
+import { Heart, MessageSquare } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import AppShell from "../components/layout/AppShell";
@@ -6,6 +7,7 @@ import Card from "../components/ui/Card";
 import FavoritePartner, { useFavoritePartners } from "../components/partners/FavoritePartner";
 import { useAuth } from "../features/auth/AuthContext";
 import { apiRequest } from "../lib/api";
+import { timeAgo } from "../lib/format";
 
 export interface InboxItem {
   partner_id: string;
@@ -26,31 +28,41 @@ export default function MessagesPage() {
 
   return <AppShell title="Messages" nav={user?.role === "DONOR" ? "donor" : "receiver"}>
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)]">
-      <div className="space-y-3">
-        <Card>
-          <h3 className="mb-2 font-bold">{user?.role === "DONOR" ? "Favorite receivers" : "Favorite donors"}</h3>
-          {favorites.data?.length ? favorites.data.map(item => <div key={item.id} className="flex items-center justify-between gap-2 border-t border-border">
-            <button className="py-2 text-left text-sm font-semibold text-primary" onClick={() => setParams({ partner: item.id })}>{item.name}</button>
-            <FavoritePartner id={item.id} name={item.name}/>
-          </div>) : <p className="text-sm text-muted">Use the heart to save a partner.</p>}
-        </Card>
-        <Card>
-          <h3 className="mb-2 font-bold">Conversations</h3>
-          {inbox.isPending ? <p className="text-sm text-muted">Loading messages…</p> : !inbox.data?.length ?
+      <aside className="min-w-0 space-y-4" aria-label="Message folders">
+        <Card className="space-y-2">
+          <h2 className="mb-3 flex items-center gap-2 font-bold"><MessageSquare size={17} className="text-primary"/>Conversations</h2>
+          {inbox.isPending ? <p className="text-sm text-muted">Loading messages…</p> : inbox.isError ?
+            <button type="button" className="view-toggle" onClick={() => void inbox.refetch()}>Retry conversations</button> : !inbox.data?.length ?
             <p className="text-sm text-muted">No conversations yet.</p> :
             inbox.data.map(item => <button key={item.partner_id} type="button" onClick={() => setParams({ partner: item.partner_id })}
-              className={`mb-1 w-full rounded-lg p-2 text-left ${partner === item.partner_id ? "bg-primaryLight" : "hover:bg-background"}`}>
-              <span className="flex justify-between gap-2 text-sm font-semibold">{item.name}
-                {item.unread > 0 && <span className="rounded-full bg-primary px-2 text-white">{item.unread}</span>}
+              aria-pressed={partner === item.partner_id}
+              className={"w-full rounded-xl border px-3 py-2.5 text-left " + (partner === item.partner_id ? "border-primary/30 bg-primaryLight" : "border-border hover:bg-background")}>
+              <span className="flex items-center justify-between gap-2 text-sm font-semibold">
+                <span className="min-w-0 truncate">{item.name}</span>
+                {item.unread > 0 && <span className="shrink-0 rounded-full bg-primary px-2 text-white" aria-label={item.unread + " unread"}>{item.unread}</span>}
               </span>
-              <span className="block truncate text-xs text-muted">{item.last_message}</span>
+              <span className="mt-1 block truncate text-xs text-muted">{item.last_message}</span>
+              <span className="mt-1 block text-xs text-muted">{timeAgo(item.updated_at)}</span>
             </button>)}
         </Card>
-      </div>
-      {partner ? <div>
-        <div className="mb-2 flex items-center justify-end text-sm"><FavoritePartner id={partner} name={name ?? "partner"}/></div>
-        <ChatBox key={partner} partnerId={partner} defaultOpen/>
-      </div> : <Card>Select a partner to chat.</Card>}
+        <Card>
+          <h2 className="mb-2 flex items-center gap-2 font-bold"><Heart size={17} className="text-primary"/>Saved partners</h2>
+          {favorites.data?.length ? favorites.data.map(item => <div key={item.id} className="flex items-center justify-between gap-2 border-t border-border">
+            <button type="button" aria-pressed={partner === item.id} className="min-h-11 text-left text-sm font-semibold text-primary"
+              onClick={() => setParams({ partner: item.id })}>{item.name}</button>
+            <FavoritePartner id={item.id} name={item.name}/>
+          </div>) : <p className="text-sm text-muted">No saved partners yet.</p>}
+        </Card>
+      </aside>
+      {partner ? <ChatBox key={partner} partnerId={partner} recipientName={name}
+        headerAction={<FavoritePartner id={partner} name={name ?? "partner"}/>}/> :
+        <Card className="grid min-h-64 place-items-center text-center">
+          <div>
+            <MessageSquare size={28} className="mx-auto mb-3 text-primary" aria-hidden="true"/>
+            <h2 className="font-bold">Select a conversation</h2>
+            <p className="mt-1 text-sm text-muted">Choose a conversation or a saved partner.</p>
+          </div>
+        </Card>}
     </div>
   </AppShell>;
 }

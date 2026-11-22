@@ -98,12 +98,20 @@ _CAPACITIES = {
 }
 
 # (email, organization name, role, display name)
+_LEGACY_NAMES = {
+    "donor@rescuerelay.demo": "Demo Donor",
+    "hope@rescuerelay.demo": "Hope Demo",
+    "shelter@rescuerelay.demo": "Shelter Demo",
+    "cityfood@rescuerelay.demo": "City Food Demo",
+    "admin@rescuerelay.demo": "Demo Admin",
+}
+
 _USERS = [
-    ("donor@rescuerelay.demo", "Madhapur Grand Events", UserRole.DONOR.value, "Demo Donor"),
-    ("hope@rescuerelay.demo", "Hope Community Kitchen", UserRole.RECEIVER.value, "Hope Demo"),
-    ("shelter@rescuerelay.demo", "ShelterServe", UserRole.RECEIVER.value, "Shelter Demo"),
-    ("cityfood@rescuerelay.demo", "City Food Relief", UserRole.RECEIVER.value, "City Food Demo"),
-    ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Demo Admin"),
+    ("donor@rescuerelay.demo", "Madhapur Grand Events", UserRole.DONOR.value, "Arjun Reddy"),
+    ("hope@rescuerelay.demo", "Hope Community Kitchen", UserRole.RECEIVER.value, "Kavya Sharma"),
+    ("shelter@rescuerelay.demo", "ShelterServe", UserRole.RECEIVER.value, "Anjali Rao"),
+    ("cityfood@rescuerelay.demo", "City Food Relief", UserRole.RECEIVER.value, "Nikhil Varma"),
+    ("admin@rescuerelay.demo", "RescueRelay Admin", UserRole.ADMIN.value, "Aditi Mehta"),
 ]
 
 
@@ -164,6 +172,8 @@ def _seed(session) -> None:
                     is_active=True,
                 )
             )
+        elif user.organization_id == orgs_by_name[org_name].id and user.name == _LEGACY_NAMES[email]:
+            user.name = display_name
 
 
 def _seed_demo_rescue(session) -> None:

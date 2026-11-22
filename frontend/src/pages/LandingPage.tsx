@@ -1,21 +1,16 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Utensils,
   Heart,
-  Zap,
   MapPin,
   ShieldCheck,
   TrendingUp,
   ArrowRight,
   Leaf,
 } from "lucide-react";
-
-const STATS = [
-  { label: "Meals rescued", value: "12,480+", icon: <Utensils className="h-5 w-5" /> },
-  { label: "Partner receivers", value: "38", icon: <Heart className="h-5 w-5" /> },
-  { label: "Avg. pickup time", value: "23 min", icon: <Zap className="h-5 w-5" /> },
-  { label: "CO₂e avoided", value: "4.9 tonnes", icon: <Leaf className="h-5 w-5" /> },
-];
+import { apiRequest } from "../lib/api";
+import type { ImpactSummary } from "../types/api";
 
 const HOW_IT_WORKS = [
   {
@@ -63,6 +58,17 @@ const ROLES = [
 ];
 
 export default function LandingPage() {
+  const { data: impact } = useQuery({
+    queryKey: ["impact", "community"],
+    queryFn: () => apiRequest<ImpactSummary>("/impact/community"),
+  });
+  const stats = impact && [
+    { label: "Meals delivered", value: impact.total_meals_rescued, icon: <Utensils className="h-5 w-5" /> },
+    { label: "Receiving partners", value: impact.community_partners, icon: <Heart className="h-5 w-5" /> },
+    { label: "Completed rescues", value: impact.completed_rescues, icon: <TrendingUp className="h-5 w-5" /> },
+    { label: "Estimated CO₂e avoided", value: impact.co2e_kg_estimate, unit: " kg", icon: <Leaf className="h-5 w-5" /> },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -76,7 +82,7 @@ export default function LandingPage() {
           </Link>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-successLight px-2.5 py-0.5 text-xs font-semibold text-success">
-              <MapPin className="mr-1 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Hyderabad Demo
+              <MapPin className="mr-1 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Hyderabad
             </span>
             <Link
               to="/login"
@@ -91,10 +97,6 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 px-4 py-20 text-white">
         <div className="relative mx-auto max-w-4xl text-center">
-          <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-sm font-medium backdrop-blur-sm">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-300" />
-            Live in Hyderabad · Sample data
-          </span>
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">
             Surplus food has a deadline.
             <br />
@@ -129,20 +131,19 @@ export default function LandingPage() {
       </section>
 
       {/* Stats bar */}
-      <section className="border-b border-border bg-surface">
+      {stats && <section className="border-b border-border bg-surface" aria-label="Community impact">
         <div className="mx-auto grid max-w-5xl grid-cols-2 divide-x divide-border md:grid-cols-4">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div key={s.label} className="flex flex-col items-center gap-1 px-4 py-6 text-center">
               <span className="flex items-center gap-1.5 text-muted">
                 {s.icon}
                 <span className="text-xs font-medium">{s.label}</span>
               </span>
-              <span className="text-2xl font-extrabold text-ink">{s.value}</span>
-              <span className="text-xs text-muted">Sample data</span>
+              <span className="text-2xl font-extrabold text-ink">{s.value.toLocaleString("en-IN")}{s.unit}</span>
             </div>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* How it works */}
       <section className="px-4 py-16">
@@ -178,10 +179,6 @@ export default function LandingPage() {
         <div className="mx-auto max-w-5xl">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold text-ink">Get started as…</h2>
-            <p className="mt-2 text-muted">
-              Demo credentials are pre-filled. Password:{" "}
-              <code className="rounded bg-background px-1 font-mono text-xs">demo123</code>
-            </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {ROLES.map((r) => (
@@ -212,17 +209,14 @@ export default function LandingPage() {
           </div>
           <h3 className="mb-2 font-bold text-ink">Our guardrails</h3>
           <p className="text-sm text-muted">
-            RescueRelay connects donors and receivers. We do <strong>not</strong> certify food
-            safety. All handling and storage information is provided by the donor and must be
-            independently verified by the receiver before distribution. All data shown is{" "}
-            <strong>synthetic sample data</strong>. No real personal details are stored or displayed.
+            Donors share handling details. Receivers check storage and ingredients before distribution.
           </p>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-border bg-surface px-4 py-6 text-center text-xs text-muted">
-        RescueRelay · Hackathon Demo · Hyderabad · Sample data only · No real food transactions
+        RescueRelay · Hyderabad
       </footer>
     </div>
   );

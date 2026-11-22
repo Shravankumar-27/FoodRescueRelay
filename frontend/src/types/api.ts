@@ -305,6 +305,7 @@ export interface ChatData {
 }
 
 export interface LeaderboardEntry {
+  id: string;
   kindness_coins: number;
   contribution_medal: string;
   trust_score: number;

@@ -4,10 +4,11 @@ import { Link } from "react-router-dom";
 import AppShell from "../../components/layout/AppShell";
 import StatusBadge from "../../components/rescue/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
+import Card from "../../components/ui/Card";
 import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
 import { ApiError, apiRequest } from "../../lib/api";
-import { formatDateTime } from "../../lib/format";
+import { formatDateTime, statusLabel } from "../../lib/format";
 import type { RescueSummary } from "../../types/api";
 
 export default function RescueHistoryPage() {
@@ -22,13 +23,39 @@ export default function RescueHistoryPage() {
     enabled: !!token,
   });
 
-  const rescues = [...(mine.data ?? [])].filter(r=>(!status||r.status===status)&&(!search||`${r.display_id} ${r.locality}`.toLowerCase().includes(search.toLowerCase()))&&(!month||new Date(r.created_at).getMonth()===new Date().getMonth()&&new Date(r.created_at).getFullYear()===new Date().getFullYear())).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const now = new Date();
+  const term = search.trim().toLowerCase();
+  const rescues = (mine.data ?? []).filter(rescue => {
+    const created = new Date(rescue.created_at);
+    const matchesMonth = created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
+    return (!status || rescue.status === status) && (!month || matchesMonth)
+      && (!term || (rescue.display_id + " " + rescue.locality).toLowerCase().includes(term));
+  }).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return (
     <AppShell title="Rescue history" nav="donor">
       <div className="flex flex-col gap-4">
         <section className="harvest-hero"><p className="eyebrow text-white/70">Your contribution journal</p><h2 className="mt-2 text-3xl font-bold">Every handoff has a story.</h2><p className="mt-3 text-sm text-white/80">Review deliveries, revisit a pickup and find your receiver-issued appreciation.</p></section>
-        <div className="flex flex-wrap gap-2"><input aria-label="Search donation history" placeholder="Search rescue or locality" value={search} onChange={e=>setSearch(e.target.value)} className="min-h-12 rounded-xl border border-border px-3"/><select aria-label="Filter donation status" value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{["POSTED","MATCHING","OFFERED","CLAIMED","COLLECTED","DELIVERED","EXPIRED","CANCELLED"].map(t=><option key={t} value={t}>{t.toLowerCase()}</option>)}</select><label className="flex min-h-12 items-center gap-2 text-sm"><input type="checkbox" checked={month} onChange={e=>setMonth(e.target.checked)}/>This month</label><button className="min-h-12 px-3 text-sm text-primary underline" onClick={()=>{setStatus("");setSearch("");setMonth(false);}}>Clear filters</button></div><p className="text-xs text-muted">Filtering your latest 50 listings. Lifetime totals and all delivered records remain available in Impact.</p>
+        <Card className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_auto_auto]">
+          <label className="grid gap-1 text-sm font-semibold">
+            Search
+            <input aria-label="Search donation history" placeholder="Rescue ID or locality" value={search}
+              onChange={e => setSearch(e.target.value)} className="min-h-11 w-full rounded-xl border border-border px-3 font-normal"/>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold">
+            Status
+            <select aria-label="Filter donation status" value={status} onChange={e => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              {["POSTED", "MATCHING", "OFFERED", "CLAIMED", "COLLECTED", "DELIVERED", "EXPIRED", "CANCELLED"].map(value =>
+                <option key={value} value={value}>{statusLabel(value)}</option>)}
+            </select>
+          </label>
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm">
+            <input type="checkbox" checked={month} onChange={e => setMonth(e.target.checked)}/>This month
+          </label>
+          <button type="button" className="min-h-11 px-3 text-sm font-semibold text-primary disabled:text-muted"
+            disabled={!status && !search && !month} onClick={() => { setStatus(""); setSearch(""); setMonth(false); }}>Clear filters</button>
+        </Card>
         {mine.isLoading && (
           <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading rescue history">
             <Skeleton className="h-16 w-full" />

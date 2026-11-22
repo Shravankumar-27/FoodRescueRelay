@@ -90,7 +90,7 @@ export function storyPoster(d: StoryPosterData) {
   ${block(d.issuer,82,76,1120,20,ink,700)}
   ${text(d.footer,76,1220,18,muted)}
   ${text(d.disclaimer,76,1261,16,muted)}
-  ${text("SYNTHETIC DEMO · CONTRIBUTION RECOGNITION",76,1292,16,gold,700)}
+  ${text("RESCUERELAY · CONTRIBUTION RECOGNITION",76,1292,16,gold,700)}
   </g></svg>`;
 }
 

@@ -1,18 +1,16 @@
-import ContributionBanner from "../../components/impact/ContributionBanner";
 import HandlingIcon from "../../components/ui/HandlingIcon";
 import Metric from "../../components/ui/Metric";
 import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Map, List, MapPin, Utensils, CheckCircle2, Check, PauseCircle, Truck } from "lucide-react";
+import { Map, List, MapPin, Utensils, CheckCircle2, Check, PauseCircle, Truck, ClipboardList, Heart, Award } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import Skeleton from "../../components/ui/Skeleton";
 import RescueClock from "../../components/rescue/RescueClock";
-import SafetyNotice from "../../components/rescue/SafetyNotice";
 import FavoritePartner, { useFavoritePartners } from "../../components/partners/FavoritePartner";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useToast } from "../../features/toast/ToastContext";
@@ -107,7 +105,6 @@ function OfferCard({
         {item.name} · {foodLabel(item.dietary_type)} · {item.quantity_servings} posted
       </li>)}</ul>
       {offer.handling_notes && <p className="mb-2">{offer.handling_notes}</p>}
-      <SafetyNotice/>
       <Link to={`/messages?partner=${offer.donor_id}`} className="mt-2 inline-block font-semibold text-primary">Message donor</Link>
     </details>
     <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border pt-3">
@@ -227,9 +224,11 @@ export default function ReceiverHomePage() {
     <AppShell title="Available rescues" nav="receiver">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/receiver/planner" className="view-toggle">Allocation planner</Link>
-          <Link to="/messages" className="view-toggle">Saved donors</Link>
-          <Link to="/recognition" className="view-toggle">Appreciation</Link>
+          <nav aria-label="Receiver tools" className="grid w-full gap-2 sm:grid-cols-3">
+            <Link to="/receiver/planner" className="view-toggle justify-center"><ClipboardList size={18}/>Allocation planner</Link>
+            <Link to="/messages" className="view-toggle justify-center"><Heart size={18}/>Saved donors</Link>
+            <Link to="/recognition" className="view-toggle justify-center"><Award size={18}/>Appreciation</Link>
+          </nav>
         </div>
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Compatible listings" value={offersQuery.isPending ? "—" : offers.length} note="Based on your capacity & diet"/><Metric label="Active pickups" value={activePickups.length} note="Waiting for your next step"/><Metric label="Meals this month" value={impact.data?.meals_rescued_month ?? "—"} note="Confirmed deliveries"/><Metric label="Meals received" value={impact.data?.total_meals_rescued ?? "—"} note="All-time contribution"/></section>
         <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -286,14 +285,30 @@ export default function ReceiverHomePage() {
         </Card>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select aria-label="Donor locality" value={area} onChange={event => setArea(event.target.value)}>
-            <option value="">All localities</option>{[...new Set([...areas, ...(area ? [area] : [])])].map(location => <option key={location}>{location}</option>)}
-          </select>
-          <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={favoritesOnly}
-            onChange={event => setFavoritesOnly(event.target.checked)}/>Favorite donors</label>
-        </div>
-        <div className="flex flex-wrap items-center gap-2"><select aria-label="Filter available food by diet" value={diet} onChange={e => setDiet(e.target.value)}><option value="">All compatible diets</option>{DIETS.map(d => <option key={d} value={d}>{foodLabel(d)}</option>)}</select><select aria-label="Filter available food by category" value={category} onChange={e => setCategory(e.target.value)}><option value="">All food categories</option>{CATEGORIES.map(c => <option key={c} value={c}>{foodLabel(c)}</option>)}</select><Link to="/receiver/capacity" className="min-h-12 inline-flex items-center text-sm font-semibold text-primary">Edit food preferences</Link></div>
+        <Card>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Filter offers</h2>
+            <Link to="/receiver/capacity" className="text-sm font-semibold text-primary hover:underline">Edit food preferences</Link>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <select aria-label="Donor locality" value={area} onChange={event => setArea(event.target.value)}>
+              <option value="">All localities</option>
+              {[...new Set([...areas, ...(area ? [area] : [])])].map(location => <option key={location}>{location}</option>)}
+            </select>
+            <select aria-label="Filter available food by diet" value={diet} onChange={event => setDiet(event.target.value)}>
+              <option value="">All compatible diets</option>
+              {DIETS.map(value => <option key={value} value={value}>{foodLabel(value)}</option>)}
+            </select>
+            <select aria-label="Filter available food by category" value={category} onChange={event => setCategory(event.target.value)}>
+              <option value="">All food categories</option>
+              {CATEGORIES.map(value => <option key={value} value={value}>{foodLabel(value)}</option>)}
+            </select>
+            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm">
+              <input type="checkbox" checked={favoritesOnly} onChange={event => setFavoritesOnly(event.target.checked)}/>
+              Favorite donors
+            </label>
+          </div>
+        </Card>
         {/* List / Map toggle */}
         <div className="flex gap-1 rounded-xl bg-background p-1 w-fit">
           <button
@@ -371,7 +386,6 @@ export default function ReceiverHomePage() {
             )}
           </section>
         )}
-        <ContributionBanner/>
       </div>
     </AppShell>
   );

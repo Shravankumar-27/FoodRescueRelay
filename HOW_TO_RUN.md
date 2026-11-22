@@ -129,7 +129,30 @@ python -m app.seed.init_db
 
 `alembic upgrade head` applies the migrations. With `DEMO_MODE=true`, `init_db` populates fictional postings, deliveries, coins, feedback, appreciation, allocation plans and provider options. It also fills missing history records in older seeded demos. Running it again preserves existing postings and feedback.
 
-Postings, deliveries, feedback, appreciation, favorites and plans are stored in the selected database. A fresh clone recreates the fictional demo from the seed. To share your team's live information, point the backend instances to the same authorized PostgreSQL database using `DATABASE_URL`. Store credentials locally or in the deployment's secret store.
+Postings, deliveries, feedback, appreciation, favorites and plans are stored in the selected database. A fresh clone recreates the fictional demo from the seed.
+
+### Share live data with teammates
+
+1. Run one RescueRelay API at a team-accessible HTTPS address. Configure its `DATABASE_URL` to use the existing SQLite database on persistent storage, or a team PostgreSQL database. To retain existing records, start with the database that already contains them. Run migrations on that database when updating the API.
+2. Each teammate creates `frontend/.env.local` with the same API origin, then restarts the frontend.
+
+   ```dotenv
+   VITE_API_BASE_URL=/api/v1
+   RESCUERELAY_API_TARGET=https://api.your-team.example
+   ```
+
+3. Run `npm run dev` in `frontend` and sign in to the appropriate organization. Teammates only need the frontend. They can see new activity from the shared API as their views refresh, subject to the usual organization permissions.
+
+Keep database credentials on the API host. A hosted frontend can use the same API by routing `/api/v1` to it in its hosting configuration.
+
+With the optional Docker Compose setup, put `RESCUERELAY_API_TARGET` in the repository-root `.env` alongside the existing Compose settings. Run `docker compose up --build --no-deps frontend` to connect the frontend to the shared API without starting a local backend and database.
+
+### Load a teammate's SQLite snapshot
+
+1. Receive the `.db` snapshot privately from the teammate who owns the records. Place it in `backend/data/` as `team-snapshot.db`.
+2. Set `DATABASE_URL=sqlite:///./data/team-snapshot.db` in `backend/.env`. Run the backend from `backend` and sign in to the organization that owns the records.
+
+The snapshot contains account and pickup records. Keep it outside Git. A snapshot preserves the data as of the export. Use the shared API above to see later changes.
 
 ### Start the API
 
