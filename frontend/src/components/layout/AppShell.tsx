@@ -52,6 +52,7 @@ const NAV_ITEMS: Record<NavKey, NavItem[]> = {
     { to: "/admin", label: "Overview", icon: <BarChart3 className="h-5 w-5" />, end: true },
     { to: "/admin/organizations", label: "Organizations", icon: <Users className="h-5 w-5" /> },
     { to: "/admin/rescues", label: "Rescues", icon: <BookOpen className="h-5 w-5" /> },
+    { to: "/admin/recognition", label: "Certificates", icon: <BookOpen className="h-5 w-5" /> },
     { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
   ],
 };

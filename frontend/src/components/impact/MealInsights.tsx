@@ -16,9 +16,8 @@ export default function MealInsights() {
   const query = useQuery({ queryKey: ["meal-insights"], queryFn: () => apiRequest<Insights>("/impact/meal-insights", { token }) });
   const data = query.data;
   return <Card>
-    <h3 className="text-lg font-semibold">Meal feedback and menu insights</h3>
     {query.isPending && <p className="mt-2 text-sm text-muted">Loading meal feedback…</p>}
-    {query.isError && <p role="alert" className="mt-2 text-sm text-danger">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Try again</button></p>}
+    {query.isError && <button type="button" className="view-toggle" onClick={() => void query.refetch()}>Retry meal feedback</button>}
     {data && <p className="mt-2 text-sm text-muted">{data.responses} {data.responses === 1 ? "response" : "responses"} from partner kitchens.{data.responses < data.minimum && ` Combined insights appear after ${data.minimum} responses.`}</p>}
     {data && data.responses >= data.minimum && <>
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">

@@ -1,384 +1,225 @@
-import RecognitionCard from "../../components/rescue/RecognitionCard";
-import PartnerRating from "../../components/rescue/PartnerRating";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { Copy, CheckCircle2, Repeat2, AlertCircle, Flame, Leaf, Snowflake, Thermometer } from "lucide-react";
+import { ChevronDown, Copy, Handshake, Package, Repeat2, Route, Utensils } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
+import Card from "../../components/ui/Card";
+import Button from "../../components/ui/Button";
+import Skeleton from "../../components/ui/Skeleton";
+import ChatBox from "../../components/chat/ChatBox";
 import MatchExplanation from "../../components/rescue/MatchExplanation";
+import AllocationPuzzle from "../../components/rescue/AllocationPuzzle";
+import PickupLogistics from "../../components/rescue/PickupLogistics";
+import PartnerRating from "../../components/rescue/PartnerRating";
+import RecognitionCard from "../../components/rescue/RecognitionCard";
 import RescueClock from "../../components/rescue/RescueClock";
 import StatusBadge from "../../components/rescue/StatusBadge";
 import StatusTimeline from "../../components/rescue/StatusTimeline";
 import HowWeCalculate from "../../components/impact/HowWeCalculate";
 import ImpactMetric from "../../components/impact/ImpactMetric";
-import ChatBox from "../../components/chat/ChatBox";
-import Button from "../../components/ui/Button";
-import Card from "../../components/ui/Card";
-import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
 import { useToast } from "../../features/toast/ToastContext";
-import { apiRequest } from "../../lib/api";
-import AllocationPuzzle from "../../components/rescue/AllocationPuzzle";
-import PickupLogistics from "../../components/rescue/PickupLogistics";
-import { formatMinutes, statusLabel } from "../../lib/format";
 import { pollInterval } from "../../hooks/usePolling";
+import { apiRequest } from "../../lib/api";
+import { foodLabel } from "../../lib/food";
+import { formatDateTime, formatMinutes } from "../../lib/format";
 import type { MatchCandidate, RescueDetail } from "../../types/api";
 
 const MATCHABLE = ["POSTED", "MATCHING", "OFFERED"];
-const CANCELLABLE = ["POSTED", "MATCHING", "OFFERED", "CLAIMED"];
-const RETRY_AFTER_MS = 2 * 60 * 1000;
-
-const DIETARY_LABELS: Record<string, string> = {
-  VEG: "Vegetarian",
-  NON_VEG: "Non-vegetarian",
-  VEGAN: "Vegan",
-  JAIN: "Jain",
-  HALAL: "Halal",
-  GLUTEN_FREE: "Gluten-free",
-  DIABETIC_FRIENDLY: "Diabetic-friendly",
-  RAW_VEGAN: "Raw Vegan",
-  OTHER: "Other",
-  UNKNOWN: "Unknown",
-};
-
-const HANDLING_ICONS: Record<string, React.ReactNode> = {
-  HOT_HELD: <Flame className="h-4 w-4 text-urgent" />,
-  REFRIGERATED: <Snowflake className="h-4 w-4 text-info" />,
-  ROOM_TEMPERATURE: <Thermometer className="h-4 w-4 text-warn" />,
-  OTHER: <Leaf className="h-4 w-4 text-muted" />,
-  UNKNOWN: <AlertCircle className="h-4 w-4 text-muted" />,
-};
-
-const HANDLING_LABELS: Record<string, string> = {
-  HOT_HELD: "Kept hot (above 60 °C)",
-  REFRIGERATED: "Refrigerated (below 5 °C)",
-  ROOM_TEMPERATURE: "Room temperature — consume within 2 hrs",
-  OTHER: "Other (see notes)",
-  UNKNOWN: "Not specified",
-};
-
-type DetailWithFlags = RescueDetail & { matching_error?: boolean };
 
 export default function ActiveRescuePage() {
   const { id = "" } = useParams();
   const { token } = useAuth();
-  const { toast, error: toastError } = useToast();
-  const qc = useQueryClient();
+  const notify = useToast();
+  const client = useQueryClient();
   const [cancelReason, setCancelReason] = useState("");
   const [showCancel, setShowCancel] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const key = ["rescue", id];
+  const path = `/rescues/${id}`;
 
   const rescue = useQuery({
-    queryKey: ["rescue", id],
-    queryFn: () => apiRequest<DetailWithFlags>(`/rescues/${id}`, { token }),
+    queryKey: key,
+    queryFn: () => apiRequest<RescueDetail>(path, { token }),
     enabled: !!token && !!id,
-    staleTime: 0,
-    refetchInterval: (query) => pollInterval(query.state.data?.status),
+    refetchInterval: query => pollInterval(query.state.data?.status),
   });
-
   const d = rescue.data;
   const status = d?.status;
   const matchable = !!status && MATCHABLE.includes(status);
-  const cancellable = !!status && CANCELLABLE.includes(status);
-
+  const cancellable = matchable || status === "CLAIMED";
   const matches = useQuery({
     queryKey: ["matches", id],
-    queryFn: () => apiRequest<MatchCandidate[]>(`/rescues/${id}/matches`, { token }),
-    enabled: !!token && !!id && matchable,
-    refetchInterval: () => pollInterval(status),
+    queryFn: () => apiRequest<MatchCandidate[]>(`${path}/matches`, { token }),
+    enabled: !!token && matchable,
+    refetchInterval: pollInterval(status),
   });
 
-  const onRescueUpdated = (data: RescueDetail) => {
-    qc.setQueryData(["rescue", id], data);
-    qc.invalidateQueries({ queryKey: ["matches", id] });
-    qc.invalidateQueries({ queryKey: ["rescues", "mine"] });
-  };
+  async function refreshRescue(data: RescueDetail) {
+    await client.cancelQueries({ queryKey: key });
+    client.setQueryData(key, data);
+    void client.invalidateQueries({ queryKey: ["matches", id] });
+    void client.invalidateQueries({ queryKey: ["rescues", "mine"] });
+  }
 
   const dispatch = useMutation({
-    mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/dispatch`, { method: "POST", token }),
-    onSuccess: onRescueUpdated,
+    mutationFn: () => apiRequest<RescueDetail>(`${path}/dispatch`, { method: "POST", token }),
+    onSuccess: refreshRescue,
   });
   const replacement = useMutation({
-    mutationFn: (receiverId: string) => apiRequest<RescueDetail>(`/rescues/${id}/replacement/${receiverId}`, { method: "POST", token }),
-    onSuccess: data => {
-      onRescueUpdated(data);
-      toast({ variant: "success", title: "Replacement offer sent", message: "The receiver can now accept this donation." });
-    },
+    mutationFn: (receiver: string) => apiRequest<RescueDetail>(`${path}/replacement/${receiver}`, { method: "POST", token }),
+    onSuccess: async data => { await refreshRescue(data); notify.success("Replacement offer sent."); },
     onError: () => void rescue.refetch(),
   });
-
   const cancel = useMutation({
-    mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/cancel`, { method: "POST", token, body: {reason:cancelReason} }),
-    onSuccess: (data) => {
-      onRescueUpdated(data);
-      toast({ variant: "info", title: "Rescue cancelled", message: "The listing is closed and reserved capacity is released." });
-    },
+    mutationFn: () => apiRequest<RescueDetail>(`${path}/cancel`, { method: "POST", token, body: { reason: cancelReason } }),
+    onSuccess: async data => { await refreshRescue(data); setShowCancel(false); notify.success("Rescue cancelled."); },
     onError: () => void rescue.refetch(),
   });
-
-  function onCancel() {
-    setShowCancel(true);
-  }
 
   async function copyCode(code: string) {
     try {
       await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast({ variant: "success", title: "Code copied!", message: "Share it with the receiver." });
+      notify.success("Pickup code copied.");
     } catch {
-      toastError("Couldn’t copy the code. Select and copy it manually.");
+      notify.error("Couldn’t copy the pickup code. Select and copy it manually.");
     }
   }
 
-  const flagged = d?.matching_error === true;
   const release = [...(d?.status_events ?? [])].reverse().find(event => event.reason?.startsWith("receiver_released: "));
-  const createdAt = d?.status_events?.[0]?.created_at;
-  const postedTooLong =
-    status === "POSTED" && !!createdAt && Date.now() - new Date(createdAt).getTime() > RETRY_AFTER_MS;
-  const needsRetry = matchable && (flagged || postedTooLong);
-  const statusLine = d ? `Status: ${statusLabel(d.status)}` : "";
+  const compatible = matches.data?.filter(candidate => candidate.feasible) ?? [];
+  const replacements = compatible.filter(candidate => candidate.replacement_available && candidate.receiver_id);
+  const needsRetry = d && matchable && (d.matching_error || (status === "POSTED" && Date.now() - Date.parse(d.created_at) > 120000));
+  const minutes = d ? (Date.parse(d.pickup_by) - Date.now()) / 60000 : 0;
+  const urgency = minutes > 60 ? "border-t-primary" : minutes > 20 ? "border-t-warn" : "border-t-urgent";
 
-  // Urgency colour for the top bar
-  const isUrgent = d && ["POSTED", "MATCHING", "OFFERED"].includes(d.status);
-  const minsLeft = d ? Math.round((new Date(d.pickup_by).getTime() - Date.now()) / 60000) : 0;
-  const urgencyBarColor =
-    minsLeft > 60 ? "bg-fresh" : minsLeft > 20 ? "bg-warn" : "bg-urgent";
-
-  return (
-    <AppShell title="Rescue" nav="donor" backTo="/donor">
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        {/* Urgency colour bar */}
-        {isUrgent && d && (
-          <div className={`col-span-full h-1.5 w-full rounded-full ${urgencyBarColor}`} role="presentation" />
-        )}
-
-        {rescue.isLoading && (
-          <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading rescue">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-        )}
-
-        {rescue.isError && <Button variant="secondary" onClick={() => void rescue.refetch()}>Retry rescue</Button>}
-
-        {d && (
-          <>
-            <div aria-live="polite" className="sr-only">
-              {statusLine}
+  return <AppShell title="Rescue" nav="donor" backTo="/donor">
+    <div className="space-y-4">
+      {rescue.isPending && <Skeleton className="h-64 w-full"/>}
+      {rescue.isError && <Button variant="secondary" onClick={() => void rescue.refetch()}>Retry rescue</Button>}
+      {d && <>
+        <Card className={`overflow-hidden border-t-4 ${cancellable ? urgency : "border-t-primary"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-primary">Rescue {d.display_id}</p>
+              <h2 className="mt-1 text-xl font-bold text-ink sm:text-2xl">{d.food_items[0]?.name ?? "Food donation"}</h2>
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span aria-live="polite"><StatusBadge status={d.status}/></span>
+              {cancellable && <RescueClock pickupBy={d.pickup_by}/>}
+            </div>
+          </div>
+          <dl className="mt-4 grid grid-cols-1 gap-2 rounded-xl bg-background p-2 min-[470px]:grid-cols-3">
+            <div className="min-w-0 rounded-lg px-3 py-2"><dt className="text-xs text-muted">Portions</dt><dd className="mt-0.5 text-sm font-semibold">{d.total_servings} servings</dd></div>
+            <div className="min-w-0 rounded-lg px-3 py-2"><dt className="text-xs text-muted">Locality</dt><dd className="mt-0.5 break-words text-sm font-semibold">{d.locality || "—"}</dd></div>
+            <div className="min-w-0 rounded-lg px-3 py-2"><dt className="text-xs text-muted">Pickup deadline</dt><dd className="mt-0.5 text-sm font-semibold">{formatDateTime(d.pickup_by)}</dd></div>
+          </dl>
+        </Card>
 
-            {/* Header card */}
-            <Card className="col-span-full">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-bold text-ink">{d.display_id}</h2>
-                  <StatusBadge status={d.status} />
-                {["POSTED", "MATCHING", "OFFERED", "CLAIMED"].includes(d.status) && <RescueClock pickupBy={d.pickup_by} />}
-              </div>
-              <StatusTimeline events={d.status_events ?? []} status={d.status} />
-            </Card>
+        <Card>
+          <h3 className="mb-4 flex items-center gap-2 text-base font-semibold"><Route size={18} className="text-primary"/>Rescue timeline</h3>
+          <StatusTimeline events={d.status_events ?? []} status={d.status}/>
+        </Card>
 
-            {/* Food details */}
-            <Card>
-              <h3 className="mb-3 text-lg font-semibold text-ink">Food</h3>
-              <ul className="flex flex-col gap-3">
-                {d.food_items.map((f, i) => (
-                  <li key={i} className="border-b border-border pb-3 last:border-0">
-                    <p className="font-medium text-ink">
-                      {f.name} <span className="text-muted">· {f.quantity_servings} servings</span>
-                    </p>
-                    <p className="text-sm text-muted mt-0.5">
-                      {DIETARY_LABELS[f.dietary_type] ?? f.dietary_type}
-                      {" · "}
-                      {f.allergen_info_unknown
-                        ? "Allergen info unknown"
-                        : f.allergens.length > 0
-                          ? `Allergens: ${f.allergens.join(", ")}`
-                          : "No allergens listed"}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+        {release && <Card variant="warn">
+          <h3 className="font-semibold">Pickup released</h3>
+          <p className="mt-1 text-sm">{release.reason?.slice("receiver_released: ".length)}</p>
+        </Card>}
 
-              {/* Handling info */}
-              {(d.handling_type || d.handling_notes) && (
-                <div className="mt-4 flex flex-col gap-1 rounded-xl bg-background p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">Handling</p>
-                  {d.handling_type && (
-                    <p className="flex items-center gap-2 text-sm text-ink">
-                      {HANDLING_ICONS[d.handling_type] ?? null}
-                      {HANDLING_LABELS[d.handling_type] ?? d.handling_type}
-                    </p>
-                  )}
-                  {d.handling_notes && (
-                    <p className="text-sm text-muted mt-1">{d.handling_notes}</p>
-                  )}
+        <div className="grid items-start gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
+          <Card className="min-w-0">
+            <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Utensils size={18} className="text-primary"/>Food and handling</h3>
+            <ul className="divide-y divide-border">
+              {d.food_items.map((item, index) => <li key={index} className="py-2.5 first:pt-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <p className="font-semibold text-ink">{item.name}</p>
+                  <p className="text-sm text-muted">{item.quantity_servings} servings</p>
                 </div>
-              )}
+                <p className="mt-0.5 text-sm text-muted">{foodLabel(item.dietary_type)} · {item.allergen_info_unknown ? "Allergens unknown"
+                  : item.allergens.length ? `Allergens: ${item.allergens.join(", ")}` : "No allergens listed"}</p>
+              </li>)}
+            </ul>
+            <div className="mt-2 rounded-xl bg-background p-3 text-sm">
+              <p className="flex items-center gap-2 font-semibold"><Package size={16} className="text-primary"/>{foodLabel(d.handling_type)}</p>
+              {d.handling_notes && <p className="mt-1 text-muted">{d.handling_notes}</p>}
+            </div>
+            {d.safety_notice && <p className="mt-3 text-xs text-muted">{d.safety_notice}</p>}
+          </Card>
 
-              {d.allergen_notice && <p className="mt-3 text-sm text-ink">{d.allergen_notice}</p>}
-              {d.safety_notice && <p className="mt-2 text-xs text-muted italic">{d.safety_notice}</p>}
-            </Card>
-
-            {/* Pickup code */}
-            {(d.status === "CLAIMED" || d.status === "COLLECTED") && (
-              <Card variant="fresh">
-                <h3 className="text-lg font-semibold text-ink">Pickup code</h3>
-                {d.pickup_code ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <p className="font-mono text-3xl font-black tracking-widest text-ink" aria-label="Pickup code">
-                      {d.pickup_code}
-                    </p>
-                    <Button
-                      variant="secondary"
-                      className="min-h-[44px] flex items-center gap-2"
-                      onClick={() => copyCode(d.pickup_code as string)}
-                    >
-                      {copied ? <CheckCircle2 className="h-4 w-4 text-fresh" /> : <Copy className="h-4 w-4" />}
-                      {copied ? "Copied!" : "Copy code"}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted mt-1">The pickup code isn't available yet.</p>
-                )}
-                {d.claimed_receiver && (
-                  <p className="mt-3 text-sm text-ink">
-                    Claimed by{" "}
-                    <span className="font-semibold">{d.claimed_receiver.name}</span>
-                    {d.claimed_receiver.locality ? `, ${d.claimed_receiver.locality}` : ""}
-                  </p>
-                )}
-              </Card>
-            )}
-
-            {/* In-app Coordinator Chat (Req #4 & #14) */}
-            {d.status === "CLAIMED" && <div className="col-span-full"><PickupLogistics rescueId={id} side="donor"/></div>}
-            {d.claimed_receiver && <ChatBox
-              rescueId={id}
-              recipientName={d.claimed_receiver?.name ?? "Receiver / Volunteer"}
-            />}
-
-            {/* Matching */}
-            {release && <Card variant="warn"><div role="status">
-              <h3 className="font-semibold">A receiver released this pickup</h3>
-              <p className="mt-1 text-sm">{release.reason?.slice("receiver_released: ".length)}</p>
-              {matchable && <p className="mt-2 text-sm">{d.pending_receiver ? `Replacement offer sent to ${d.pending_receiver}.` : "We’re checking for another compatible receiver."}</p>}
-            </div></Card>}
-            {matchable && (
-              <Card>
-                <h3 className="mb-3 text-lg font-semibold text-ink">Matching</h3>
-                {matches.isLoading && <Skeleton className="h-24 w-full" />}
-                {matches.isError && <Button variant="secondary" onClick={() => void matches.refetch()}>Retry matching details</Button>}
-                {matches.data && <MatchExplanation candidates={matches.data} />}
-                {release && matches.data?.some(candidate => candidate.replacement_available) && <div className="mt-4 space-y-2">
-                  <h4 className="text-sm font-semibold">Choose a replacement receiver</h4>
-                  {matches.data.filter(candidate => candidate.replacement_available).map(candidate => candidate.receiver_id && <div key={candidate.receiver_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2">
-                    <span className="text-sm">{candidate.receiver_name}</span>
-                    <Button variant="secondary" disabled={replacement.isPending || candidate.receiver_name === d.pending_receiver} onClick={() => replacement.mutate(candidate.receiver_id!)}>{candidate.receiver_name === d.pending_receiver ? "Offer sent" : "Offer this donation"}</Button>
-                  </div>)}
-                </div>}
-                {d.status === "MATCHING" && matches.data && !matches.data.some(candidate => candidate.feasible) && (
-                  <p className="text-sm text-muted">
-                    No compatible receiver available yet.
-                  </p>
-                )}
-                {needsRetry && (
-                  <div className="mt-3 flex flex-col gap-3">
-                    <p className="text-sm text-muted">
-                      We couldn't complete matching right now. Your rescue has been saved.
-                    </p>
-                    <Button
-                      variant="primary"
-                      className="min-h-[44px] self-start"
-                      onClick={() => dispatch.mutate()}
-                      disabled={dispatch.isPending}
-                    >
-                      {dispatch.isPending ? "Retrying..." : "Retry matching"}
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            )}
-            {matchable && <div className="col-span-full"><AllocationPuzzle key={id} rescueId={id}/></div>}
-
-            {/* Expired / cancelled states */}
-            {d.status === "EXPIRED" && (
-              <Card variant="warn">
-                <p className="font-semibold text-warn">Pickup window ended</p>
-                <Link
-                  to="/donor/rescue/new"
-                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
-                >
-                  <Repeat2 className="h-4 w-4" /> Post again
-                </Link>
-              </Card>
-            )}
-
-            {d.status === "CANCELLED" && (
-              <Card>
-                <Link
-                  to="/donor/rescue/new"
-                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
-                >
-                  <Repeat2 className="h-4 w-4" /> Post a new rescue
-                </Link>
-              </Card>
-            )}
-
-            {/* Impact */}
-            {d.status === "DELIVERED" && (
-              <section aria-labelledby="impact-heading" className="flex flex-col gap-4">
-                <RecognitionCard rescueId={id} delivered={d.impact?.delivered_servings ?? 0}/><PartnerRating rescueId={id}/>
-                <h3 id="impact-heading" className="flex items-center gap-2 text-lg font-semibold text-ink">
-                  <Leaf className="h-4 w-4" aria-hidden="true"/> Impact
-                </h3>
-                <div className="rounded-2xl bg-fresh/10 border border-fresh/20 p-4">
-                  <ImpactMetric label="Meals rescued" value={`${d.impact?.delivered_servings ?? 0} meals`} />
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <ImpactMetric label="Rejected servings" value={String(d.impact?.rejected_servings ?? 0)} />
-                    <ImpactMetric
-                      label="Completion time"
-                      value={
-                        d.impact?.minutes_to_delivery !== undefined && d.impact?.minutes_to_delivery !== null
-                          ? formatMinutes(d.impact.minutes_to_delivery)
-                          : "—"
-                      }
-                    />
-                  </div>
-                  {/* CO2e estimate */}
-                  {d.impact?.delivered_servings && d.impact.delivered_servings > 0 && (
-                    <div className="mt-3 rounded-xl bg-background p-3 text-sm">
-                      <p className="font-semibold text-ink">
-                        ~{(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided
-                      </p>
-                      <p className="text-xs text-muted mt-0.5">
-                        Estimate: {d.impact.delivered_servings} meals × 0.4 kg/meal × 2.5 kgCO₂e/kg food waste
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <HowWeCalculate />
-              </section>
-            )}
-
-            {/* Cancel */}
-            {cancellable && (
-              <div className="flex flex-col gap-2">
-                {showCancel && <form onSubmit={e => {e.preventDefault();cancel.mutate();}} className="rounded-xl border border-border bg-white p-4"><label className="block text-sm font-semibold">Reason for cancellation<textarea value={cancelReason} onChange={e=>setCancelReason(e.target.value)} minLength={3} maxLength={300} required className="mt-2 w-full rounded-xl border border-border p-3"/></label><p className="my-3 text-sm text-muted">This closes the listing. If already claimed, coordinate with your receiver before cancelling.</p><div className="flex gap-2"><Button type="submit" variant="danger" disabled={cancel.isPending || cancelReason.trim().length<3}>Confirm cancellation</Button><Button type="button" variant="ghost" onClick={()=>setShowCancel(false)}>Keep donation</Button></div></form>}
-                <Button
-                  variant="secondary"
-                  className="min-h-[44px] self-start text-muted hover:text-urgent"
-                  onClick={onCancel}
-                  disabled={cancel.isPending}
-                >
-                  {cancel.isPending ? "Cancelling..." : "Cancel rescue"}
+          {matchable ? <AllocationPuzzle key={id} rescueId={id}>
+            <div className="mt-3">
+            {d.pending_receiver && <div className="rounded-xl bg-primaryLight/60 p-3">
+              <p className="text-xs font-semibold text-primary">Offer sent</p><p className="mt-0.5 text-sm font-semibold">{d.pending_receiver}</p>
+            </div>}
+            {matches.isPending ? <Skeleton className="mt-3 h-12 w-full"/> : matches.isError ?
+              <Button variant="secondary" onClick={() => void matches.refetch()}>Retry matching details</Button> :
+              <p className="my-3 text-sm text-muted">{compatible.length ? `${compatible.length} compatible receiver${compatible.length === 1 ? "" : "s"}` : "No compatible receiver available yet."}</p>}
+            {!!release && !!replacements.length && <div className="mb-3 divide-y divide-border">
+              <h4 className="text-sm font-semibold">Replacement receivers</h4>
+              {replacements.map(candidate => <div key={candidate.receiver_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <span>{candidate.receiver_name}</span>
+                <Button size="sm" variant="secondary" disabled={replacement.isPending || candidate.receiver_name === d.pending_receiver}
+                  onClick={() => candidate.receiver_id && replacement.mutate(candidate.receiver_id)}>
+                  {candidate.receiver_name === d.pending_receiver ? "Offer sent" : "Send offer"}
                 </Button>
-              </div>
-            )}
+              </div>)}
+            </div>}
+            {!!matches.data?.length && <details className="rounded-xl border border-border">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-primary">
+                View match details<ChevronDown size={15}/>
+              </summary>
+              <div className="max-h-80 overflow-y-auto border-t border-border p-3"><MatchExplanation candidates={matches.data}/></div>
+            </details>}
+            {needsRetry && <Button className="mt-3" variant="secondary" disabled={dispatch.isPending} onClick={() => dispatch.mutate()}>Retry matching</Button>}
+            </div>
+          </AllocationPuzzle> : status === "DELIVERED" ? <Card className="min-w-0">
+            <h3 className="mb-3 text-base font-semibold">Delivery impact</h3>
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-background p-3 sm:grid-cols-3">
+              <ImpactMetric label="Meals rescued" value={String(d.impact?.delivered_servings ?? 0)}/>
+              <ImpactMetric label="Rejected servings" value={String(d.impact?.rejected_servings ?? 0)}/>
+              <ImpactMetric label="Completion time" value={d.impact?.minutes_to_delivery == null ? "—" : formatMinutes(d.impact.minutes_to_delivery)}/>
+            </div>
+            {!!d.impact?.delivered_servings && <p className="my-3 text-sm text-muted">Estimated {(d.impact.delivered_servings * 0.4 * 2.5).toFixed(1)} kg CO₂e avoided</p>}
+            <HowWeCalculate/>
+          </Card> : <Card className="min-w-0">
+            <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Handshake size={18} className="text-primary"/>Pickup</h3>
+            {d.claimed_receiver && <div className="rounded-xl bg-background p-3">
+              <p className="text-xs text-muted">Receiver</p>
+              <p className="text-sm font-semibold">{d.claimed_receiver.name}</p>
+              {d.claimed_receiver.locality && <p className="text-sm text-muted">{d.claimed_receiver.locality}</p>}
+            </div>}
+            {status === "CLAIMED" && <div className="mt-3">
+              <p className="text-sm font-semibold">Pickup code</p>
+              {d.pickup_code ? <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-primary/40 bg-primaryLight/60 p-4">
+                <p aria-label="Pickup code" className="font-mono text-4xl font-black tracking-widest text-primaryDark">{d.pickup_code}</p>
+                <Button size="sm" onClick={() => d.pickup_code && void copyCode(d.pickup_code)}><Copy size={16}/>Copy code</Button>
+              </div> : <p className="mt-1 text-sm text-muted">Code unavailable.</p>}
+            </div>}
+            {status === "COLLECTED" && <p className="mt-3 text-sm text-muted">Awaiting delivery confirmation.</p>}
+            {["EXPIRED", "CANCELLED"].includes(d.status) && <Link className="view-toggle" to="/donor/rescue/new"><Repeat2 size={16}/>Post again</Link>}
+          </Card>}
+        </div>
 
-          </>
-        )}
-      </div>
-    </AppShell>
-  );
+        {status === "CLAIMED" && <PickupLogistics rescueId={id} side="donor"/>}
+        {status === "DELIVERED" && <div className="grid gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
+          <RecognitionCard rescueId={id} delivered={d.impact?.delivered_servings ?? 0}/>
+          <PartnerRating rescueId={id}/>
+        </div>}
+        {d.claimed_receiver && ["CLAIMED", "COLLECTED", "DELIVERED"].includes(d.status) &&
+          <ChatBox rescueId={id} recipientName={d.claimed_receiver.name ?? "Receiver"}/>}
+
+        {cancellable && <div className="border-t border-border pt-3">
+          {showCancel ? <form onSubmit={event => { event.preventDefault(); cancel.mutate(); }} className="space-y-3 rounded-xl border border-border bg-surface p-4">
+            <label className="block text-sm font-semibold">Reason for cancellation
+              <textarea value={cancelReason} onChange={event => setCancelReason(event.target.value)} minLength={3} maxLength={300}
+                required className="mt-1 w-full rounded-lg border border-border p-2"/>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="danger" disabled={cancel.isPending || cancelReason.trim().length < 3}>Confirm cancellation</Button>
+              <Button type="button" variant="ghost" onClick={() => setShowCancel(false)}>Keep rescue</Button>
+            </div>
+          </form> : <Button className="text-danger" variant="ghost" onClick={() => setShowCancel(true)}>Cancel rescue</Button>}
+        </div>}
+      </>}
+    </div>
+  </AppShell>;
 }

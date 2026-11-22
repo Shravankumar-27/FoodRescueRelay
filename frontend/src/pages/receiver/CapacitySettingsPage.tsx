@@ -8,6 +8,7 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Skeleton from "../../components/ui/Skeleton";
 import { useAuth } from "../../features/auth/AuthContext";
+import { useToast } from "../../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../../lib/api";
 import type { CapacityData } from "../../types/api";
 
@@ -43,6 +44,7 @@ interface FormState {
 
 export default function CapacitySettingsPage() {
   const { token } = useAuth();
+  const { error: toastError } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -105,16 +107,19 @@ export default function CapacitySettingsPage() {
     const avail = Number(form.available_servings);
 
     if (!Number.isInteger(max) || max < 0) {
-      setClientError("Maximum servings must be a whole number of 0 or more.");
-      return;
+      const message = "Maximum servings must be a whole number of 0 or more.";
+      setClientError(message);
+      return toastError(message);
     }
     if (!Number.isInteger(avail) || avail < 0) {
-      setClientError("Available servings must be a whole number of 0 or more.");
-      return;
+      const message = "Available servings must be a whole number of 0 or more.";
+      setClientError(message);
+      return toastError(message);
     }
     if (avail > max) {
-      setClientError("Available servings cannot be more than your maximum servings.");
-      return;
+      const message = "Available servings cannot be more than your maximum servings.";
+      setClientError(message);
+      return toastError(message);
     }
     setClientError(null);
 

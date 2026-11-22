@@ -38,7 +38,7 @@ export default function MealFeedback({ rescueId }: { rescueId: string }) {
     <h3 className="text-lg font-semibold">Help shape future donations</h3>
     <p className="mt-2 text-sm text-muted">Share your kitchen’s observations about this meal. Restaurants see combined results after at least three responses. Only share if your organization consents.</p>
     {query.isPending && <p className="mt-2 text-sm">Loading feedback…</p>}
-    {query.isError && <p role="alert" className="mt-2 text-sm text-danger">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Try again</button></p>}
+    {query.isError && <Button size="sm" variant="secondary" onClick={() => void query.refetch()}>Retry feedback</Button>}
     {query.isSuccess && draft === null && <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
       {query.data && <p role="status">Feedback shared</p>}
       <Button variant="secondary" disabled={save.isPending} onClick={() => setDraft(query.data ?? {})}>{query.data ? "Edit feedback" : "Give meal feedback"}</Button>
@@ -69,6 +69,5 @@ export default function MealFeedback({ rescueId }: { rescueId: string }) {
         <Button type="button" variant="ghost" onClick={() => { setDraft(null); setConsent(false); save.reset(); }}>Cancel</Button>
       </div>
     </form>}
-    {save.isError && <p role="alert" className="mt-2 text-sm text-danger">{save.error.message}</p>}
   </Card>;
 }

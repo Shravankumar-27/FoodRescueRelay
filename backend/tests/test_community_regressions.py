@@ -35,6 +35,20 @@ def test_open_claim_revalidates_capacity_and_preferences(create_rescue, client, 
     assert rescue["id"] not in [o["rescue_id"] for o in client.get(f"{API}/offers/available", headers=cityfood_headers).json()["data"]]
 
 
+def test_portion_feed_only_shows_compatible_food(create_rescue, client, shelter_headers, db_session):
+    org = db_session.scalar(select(Organization).where(Organization.name == "ShelterServe"))
+    capacity = db_session.scalar(select(ReceiverCapacity).where(ReceiverCapacity.organization_id == org.id))
+    capacity.excluded_allergens = ["dairy"]
+    db_session.commit()
+    rescue = create_rescue(uuid.uuid4().hex)
+    feed = client.get(f"{API}/offers/available?include_portions=true", headers=shelter_headers)
+    assert feed.status_code == 200, feed.text
+    offer = next(row for row in feed.json()["data"] if row["rescue_id"] == rescue["id"])
+    assert offer["portion_only"] and offer["suggested_servings"] == 40
+    assert [item["name"] for item in offer["food_items"]] == ["Dal"]
+    assert client.post(f"{API}/offers/open_{rescue['id']}/claim", headers=shelter_headers).status_code == 409
+
+
 def test_declined_open_listing_stays_hidden(create_rescue, client, cityfood_headers):
     rescue = create_rescue(uuid.uuid4().hex)
     assert client.post(f"{API}/offers/open_{rescue['id']}/decline", headers=cityfood_headers).status_code == 200

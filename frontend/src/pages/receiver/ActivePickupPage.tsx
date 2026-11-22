@@ -129,8 +129,11 @@ export default function ActivePickupPage() {
                   </label>)}
                 </fieldset>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Input label="Pickup code" hint="Ask the donor for the four-digit code." inputMode="numeric"
-                    maxLength={4} autoComplete="off" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ""))}/>
+                  <div className="rounded-lg border-2 border-primary/40 bg-primaryLight/60 p-2">
+                    <Input label="Pickup code" hint="Ask the donor for the four-digit code." inputMode="numeric"
+                      className="w-full font-mono text-lg font-bold tracking-widest" maxLength={4}
+                      autoComplete="off" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ""))}/>
+                  </div>
                   <Input label="Servings collected" type="number" min={1} max={d.total_servings}
                     value={collected} onChange={event => setCollected(event.target.value)}/>
                 </div>

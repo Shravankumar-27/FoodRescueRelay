@@ -33,7 +33,7 @@ export default function Card({
     <Tag
       id={id}
       onClick={onClick}
-      className={`rounded-2xl border p-4 transition-all duration-200 ${VARIANT_CLASSES[variant]} ${hoverClass} ${className}`}
+      className={`min-w-0 rounded-2xl border p-4 transition-all duration-200 ${VARIANT_CLASSES[variant]} ${hoverClass} ${className}`}
     >
       {children}
     </Tag>

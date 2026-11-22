@@ -22,9 +22,9 @@ describe("LoginPage", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
-          <AuthProvider>
-            <ToastProvider><LoginPage /></ToastProvider>
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider><LoginPage /></AuthProvider>
+          </ToastProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );

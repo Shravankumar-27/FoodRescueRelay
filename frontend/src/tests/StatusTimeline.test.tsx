@@ -24,6 +24,7 @@ describe("StatusTimeline", () => {
       "Collection (current)",
       "Delivered (pending)",
     ]);
+    expect(screen.getAllByRole("listitem")[3]).toHaveAttribute("aria-current", "step");
   });
 
   it("treats OFFERED as the matched step", () => {

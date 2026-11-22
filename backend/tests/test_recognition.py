@@ -71,6 +71,28 @@ def test_cannot_issue_before_delivery(create_rescue, client, hope_headers):
     assert issue(client, rid, hope_headers).status_code == 404
 
 
+def test_admin_certificate_is_shared_with_both_partners(delivered, client, admin_headers, donor_headers, hope_headers):
+    path = f"{API}/admin/recognition/{delivered}"
+    assert client.post(path, headers=donor_headers, json={"consent_to_publish": True}).status_code == 403
+    assert client.post(path, headers=admin_headers, json={"consent_to_publish": True, "food_rating": 5}).status_code == 422
+    response = client.post(path, headers=admin_headers, json={"consent_to_publish": True, "message": "Thank you."})
+    assert response.status_code == 200, response.text
+    certificate = response.json()["data"]
+    assert certificate["issuer_role"] == "ADMIN" and certificate["delivered_servings"] == 132
+    assert certificate["receiver_name"] == "Hope Community Kitchen"
+    listed = client.get(f"{API}/admin/recognition", headers=admin_headers, params={"code": certificate["display_id"]})
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["data"][0]["certificate"]["public_token"] == certificate["public_token"]
+    for headers in (donor_headers, hope_headers):
+        records = client.get(f"{API}/recognition/mine", headers=headers).json()["data"]
+        assert records[0]["public_token"] == certificate["public_token"]
+    public = f"{API}/recognition/verify/{certificate['public_token']}"
+    assert client.get(public).json()["data"]["issuer_role"] == "ADMIN"
+    assert client.post(f"{API}/rescues/{delivered}/recognition/withdraw", headers=hope_headers).status_code == 403
+    assert client.post(f"{path}/withdraw", headers=admin_headers).status_code == 200
+    assert client.get(public).status_code == 404
+
+
 def test_demo_reset_removes_recognition_and_chat_children(delivered, client, hope_headers, db_session):
     data = issue(client, delivered, hope_headers).json()["data"]
     client.post(f"{API}/rescues/{delivered}/chat", headers=hope_headers, json={"message":"Thank you"})

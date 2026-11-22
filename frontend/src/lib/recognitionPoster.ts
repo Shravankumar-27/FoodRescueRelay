@@ -31,7 +31,8 @@ export function recognitionPosterSvg(record: DonationRecognition, theme: PosterT
     third: record.food_rating === null ? "Not rated" : `${record.food_rating} / 5 food feedback`,
     thirdNote: "Receiver opinion, not a safety assessment",
     quote: audience === "donor" ? record.message || "Good food deserves a place at the table. Thank you for sharing yours." : "You turned surplus into shared meals. Receiving with care is an act of community leadership.",
-    issuer: audience === "donor" ? `Confirmed & issued by ${record.receiver_name}` : `Food contributed by ${record.donor_name}`,
+    issuer: record.issuer_role === "ADMIN" ? "Certificate issued by RescueRelay"
+      : audience === "donor" ? `Confirmed & issued by ${record.receiver_name}` : `Food contributed by ${record.donor_name}`,
     footer: `${record.display_id} · ${new Date(record.issued_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC`,
     badge: "WITH CARE", theme,
     disclaimer: "Acknowledgement of contribution, not food-safety, tax or legal certification.",

@@ -216,16 +216,19 @@ def feasible_ranked(results: Sequence[CandidateResult]) -> list[CandidateResult]
     return [r for r in results if r.feasible]
 
 
-def load_candidates(db: Session, rescue: Rescue, now: datetime) -> list[CandidateInput]:
+def load_candidates(db: Session, rescue: Rescue, now: datetime, receiver_id: uuid.UUID | None = None) -> list[CandidateInput]:
     """Load receiver candidates and their 24h completed counts in two queries."""
-    rows = db.execute(
+    query = (
         select(Organization, ReceiverCapacity)
         .join(ReceiverCapacity, ReceiverCapacity.organization_id == Organization.id)
         .where(
             Organization.organization_type.not_in(NON_RECEIVER_TYPES),
             Organization.id != rescue.donor_organization_id,
         )
-    ).all()
+    )
+    if receiver_id is not None:
+        query = query.where(Organization.id == receiver_id)
+    rows = db.execute(query).all()
 
     since = ensure_utc(now) - RECENT_WINDOW
     count_rows = db.execute(

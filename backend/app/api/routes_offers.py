@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.models.base_types import new_uuid, utcnow
 from app.models.enums import OfferStatus, RescueStatus, UserRole
@@ -26,7 +28,7 @@ from app.models.receiver_capacity import ReceiverCapacity
 from app.services.dispatch_service import advance_expired_offers, decline_offer
 from app.services.handoff_service import store_pickup_code
 from app.services.logistics_service import logistics_for
-from app.services.matching_service import match_rescue
+from app.services.matching_service import build_rescue_input, evaluate_candidates, load_candidates, match_rescue
 from app.services.rescue_helpers import ensure_utc, seconds_remaining
 from app.services.rescue_service import SAFETY_NOTICE, food_item_out, iso_utc
 from app.services.status import lock_rescue, transition_rescue
@@ -149,22 +151,44 @@ def _eligible(db, rescue, user, now):
 
 
 @router.get("/available")
-def list_available(request: Request, db: DbSession, user: User = Depends(require_roles(UserRole.RECEIVER))) -> dict[str, Any]:
+def list_available(
+    request: Request, db: DbSession, include_portions: bool = False,
+    user: User = Depends(require_roles(UserRole.RECEIVER)),
+) -> dict[str, Any]:
     now = utcnow()
     advance_expired_offers(db, now)
     db.commit()
     rescues = db.scalars(select(Rescue).where(Rescue.status.in_(["POSTED", "MATCHING", "OFFERED"]), Rescue.pickup_by > now).order_by(Rescue.pickup_by)).all()
     items = []
     for rescue in rescues:
-        candidate = _eligible(db, rescue, user, now)
-        if candidate is None:
+        donor = db.get(Organization, rescue.donor_organization_id)
+        if donor.verification_status != "VERIFIED":
             continue
+        candidates = load_candidates(db, rescue, now, receiver_id=user.organization_id)
+        if not candidates:
+            continue
+        buffer = get_settings().MATCHING_SAFETY_BUFFER_MINUTES
+        candidate, = evaluate_candidates(build_rescue_input(rescue, rescue.food_items), candidates, now, buffer)
+        visible_food = rescue.food_items
+        portion_only = not candidate.feasible
+        if portion_only:
+            if not include_portions:
+                continue
+            capacity = candidates[0].available_servings
+            if candidates[0].volunteer_servings is not None:
+                capacity = min(capacity, candidates[0].volunteer_servings)
+            if not capacity:
+                continue
+            visible_food = [item for item in rescue.food_items if evaluate_candidates(
+                replace(build_rescue_input(rescue, [item]), total_servings=1), candidates, now, buffer
+            )[0].feasible]
+            if not visible_food:
+                continue
         offers = db.scalars(select(MatchOffer).where(MatchOffer.rescue_id == rescue.id, MatchOffer.receiver_organization_id == user.organization_id).order_by(MatchOffer.created_at.desc())).all()
         if any(o.status == "DECLINED" for o in offers):
             continue
-        direct = next((o for o in offers if o.status == "PENDING" and ensure_utc(o.expires_at) > now), None)
+        direct = next((o for o in offers if o.status == "PENDING" and ensure_utc(o.expires_at) > now), None) if not portion_only else None
         deadline = direct.expires_at if direct else rescue.pickup_by
-        donor = db.get(Organization, rescue.donor_organization_id)
         items.append({
             "id": str(direct.id) if direct else f"open_{rescue.id}",
             "rescue_id": str(rescue.id), "rescue_display_id": rescue.display_id,
@@ -172,7 +196,9 @@ def list_available(request: Request, db: DbSession, user: User = Depends(require
             "trust_score": donor.trust_score,
             "rank_badge": donor.rank_badge,
             "locality": rescue.locality, "total_servings": rescue.total_servings,
-            "food_items": [food_item_out(item) for item in rescue.food_items],
+            "food_items": [food_item_out(item) for item in visible_food],
+            "portion_only": portion_only,
+            "suggested_servings": min(capacity, sum(item.quantity_servings for item in visible_food)) if portion_only else rescue.total_servings,
             "handling_type": rescue.handling_type, "handling_notes": rescue.handling_notes,
             "packaging_available": rescue.packaging_available, "untouched_confirmed": rescue.untouched_confirmed,
             "prepared_at": iso_utc(rescue.prepared_at), "pickup_by": iso_utc(rescue.pickup_by),

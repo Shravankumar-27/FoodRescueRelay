@@ -4,7 +4,8 @@
 
 Upgrade an existing database with `alembic upgrade head` from `backend`, then run `python -m app.seed.init_db` for a local demo database. Restart the API and frontend afterwards. Migration `0008` adds saved partners and the provider directory.
 
-- **Donors** can open **Explore split plan** on a posted rescue, adjust the split, select receivers, and click **Notify selected**. Each selected receiver sees their proposed portion and pickup deadline in **Messages** and can reply there. The donor can see when a proposal was read. The pickup workflow handles formal claims for the whole rescue.
+- **Donors** can open **Explore split plan** under **Match and allocate**, adjust portions, and notify any number of eligible receivers at once. Receivers see the proposal in **Messages**. The offers feed also shows compatible portions of larger postings. Those cards link to the donor so receivers can discuss a split. Standard claims reserve the full posting.
+- **Admins** can open **Certificates**, find a confirmed delivery by rescue code, and publish a RescueRelay appreciation certificate. Both organizations can find it in their appreciation studio.
 - **Released pickups** appear under **Pickup changes** on the donor dashboard. Dispatch contacts the next eligible receiver automatically, and the donor can send the donation to another eligible receiver from the rescue page while it remains open.
 - **Pickup logistics** lists available providers for a missing resource after a receiver accepts. A pickup partner can confirm an arrangement there. Coordinators manage the directory and outstanding requests under **Admin → Rescues**.
 - **Meal feedback** opens for the receiver after delivery. Receivers can opt in, edit, or withdraw a response. The donor dashboard shows combined menu insights after three responses.

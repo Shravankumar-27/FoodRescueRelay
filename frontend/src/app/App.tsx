@@ -26,6 +26,7 @@ const ReceiverHistoryPage = lazy(() => import("../pages/receiver/ReceiverHistory
 const AdminOverviewPage = lazy(() => import("../pages/admin/AdminOverviewPage"));
 const AdminOrganizationsPage = lazy(() => import("../pages/admin/AdminOrganizationsPage"));
 const AdminRescuesPage = lazy(() => import("../pages/admin/AdminRescuesPage"));
+const AdminRecognitionPage = lazy(() => import("../pages/admin/AdminRecognitionPage"));
 
 function RoleHome() {
   const { user, isReady } = useAuth();
@@ -61,8 +62,8 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ToastProvider>
+      <ToastProvider>
+        <AuthProvider>
           <ApiErrorToasts/>
           <BrowserRouter>
             <Suspense fallback={<div className="p-6"><Skeleton className="h-64 w-full" /></div>}>
@@ -183,12 +184,13 @@ export default function App() {
                 }
               />
 
+              <Route path="/admin/recognition" element={<RequireRole roles={["ADMIN"]}><AdminRecognitionPage/></RequireRole>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             </Suspense>
           </BrowserRouter>
-        </ToastProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

@@ -24,10 +24,31 @@ describe("Allocation puzzle controls", () => {
     render(<QueryClientProvider client={client}><AllocationPuzzle rescueId="rescue-1"/></QueryClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Explore split plan" }));
     expect(await screen.findByText("140 of 200 servings allocated")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Adjust Kitchen C"));
     fireEvent.change(screen.getByRole("slider", { name: "Volunteer capacity (50 servings)" }), { target: { value: "110" } });
     expect(screen.getByText("200 of 200 servings allocated")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset to receiver settings" }));
     expect(screen.getByText("140 of 200 servings allocated")).toBeInTheDocument();
+  });
+
+  it("splits a batch across capable receivers and selects them together", async () => {
+    vi.mocked(apiRequest).mockResolvedValueOnce({
+      items: [{ id: "rice", name: "Rice", diet: "VEG", servings: 80 }],
+      requires_refrigeration: false,
+      pickup_by: new Date(Date.now() + 3600000).toISOString(),
+      receivers: ["A", "B"].map(id => ({ id, name: `Kitchen ${id}`, capacity: 80, volunteers: null,
+        refrigeration: false, pickup_minutes: 10, eligible_items: ["rice"] })),
+    }).mockResolvedValueOnce({ notices: [], sent: 2 });
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><AllocationPuzzle rescueId="multi"/></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Explore split plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible" }));
+    fireEvent.click(screen.getByRole("button", { name: "Notify 2 selected" }));
+    expect(await screen.findByText("Sent 2 allocation proposals.")).toBeInTheDocument();
+    expect(apiRequest).toHaveBeenCalledWith("/rescues/multi/allocation-puzzle/notify", {
+      method: "POST", token: "test-token",
+      body: { proposals: ["A", "B"].map(receiver_id => ({ receiver_id, items: [{ item_id: "rice", servings: 40 }] })) },
+    });
   });
 
   it("sends only checked portions and shows the notification in the plan", async () => {

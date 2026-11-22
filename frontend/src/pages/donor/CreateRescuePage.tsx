@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, ThumbsUp, AlertTriangle, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
 import HandlingIcon from "../../components/ui/HandlingIcon";
 import AppShell from "../../components/layout/AppShell";
-import SafetyNotice from "../../components/rescue/SafetyNotice";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import { useAuth } from "../../features/auth/AuthContext";
@@ -27,8 +26,6 @@ type Draft = {
   rows: FoodRow[];
   untouched: "" | "yes" | "no";
   holding: string;
-  packaging: boolean;
-  delivery: boolean;
   notes: string;
   prepared: string;
   pickup: string;
@@ -198,14 +195,16 @@ function PickupCountdown({ pickup }: { pickup: string }) {
 function StepBar({ step }: { step: 1 | 2 | 3 }) {
   const steps = ["Food", "Handling", "Deadline"];
   return (
-    <div className="flex items-center gap-0">
+    <ol className="grid w-full grid-cols-3">
       {steps.map((s, i) => {
         const idx = i + 1;
         const done = idx < step;
         const active = idx === step;
         return (
-          <div key={s} className="flex items-center">
-            <div className="flex flex-col items-center">
+          <li key={s} aria-current={active ? "step" : undefined} className="relative min-w-0">
+            {i < steps.length - 1 && <span aria-hidden="true"
+              className={`absolute left-1/2 top-3.5 h-0.5 w-full ${done ? "bg-primary" : "bg-border"}`}/>}
+            <div className="relative flex flex-col items-center">
               <div
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${done
                     ? "bg-primary text-white"
@@ -220,13 +219,10 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
                 {s}
               </span>
             </div>
-            {i < steps.length - 1 && (
-              <div className={`mx-2 mb-5 h-0.5 w-8 sm:w-12 ${idx < step ? "bg-primary" : "bg-border"}`} />
-            )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
 
@@ -236,6 +232,7 @@ export default function CreateRescuePage() {
   const { toast, error: toastError } = useToast();
 
   const idemRef = useRef<string>("");
+  const draftWriteFailed = useRef(false);
   if (!idemRef.current) idemRef.current = randomId();
 
   const [draft] = useState<Partial<Draft> | null>(() => readDraft());
@@ -249,8 +246,6 @@ export default function CreateRescuePage() {
 
   const [untouched, setUntouched] = useState<"" | "yes" | "no">(draft?.untouched ?? "");
   const [holding, setHolding] = useState<string>(draft?.holding ?? "");
-  const [packaging, setPackaging] = useState<boolean>(draft?.packaging ?? false);
-  const [delivery, setDelivery] = useState(draft?.delivery ?? false);
   const [notes, setNotes] = useState<string>(draft?.notes ?? "");
   const [handErrs, setHandErrs] = useState<Record<string, string>>({});
 
@@ -271,16 +266,18 @@ export default function CreateRescuePage() {
 
   // Autosave draft
   useEffect(() => {
-    const d: Draft = { rows, untouched, holding, packaging, delivery, notes, prepared, pickup, locality, attest };
+    const d: Draft = { rows, untouched, holding, notes, prepared, pickup, locality, attest };
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      draftWriteFailed.current = false;
       setDraftSaved(true);
       const t = setTimeout(() => setDraftSaved(false), 1500);
       return () => clearTimeout(t);
     } catch {
-      // best-effort
+      if (!draftWriteFailed.current) toastError("Could not save the draft on this device.");
+      draftWriteFailed.current = true;
     }
-  }, [rows, untouched, holding, packaging, delivery, notes, prepared, pickup, locality, attest]);
+  }, [rows, untouched, holding, notes, prepared, pickup, locality, attest, toastError]);
 
   function updateRow(i: number, patch: Partial<FoodRow>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -328,8 +325,6 @@ export default function CreateRescuePage() {
       served_or_mixed_with_waste: untouched === "no",
       handling_type: holding,
       handling_notes: notes.trim() || null,
-      packaging_available: packaging,
-      donor_transport_available: delivery,
       prepared_at: toIso(prepared),
       pickup_by: toIso(pickup),
       locality: locality.trim() || null,
@@ -357,6 +352,7 @@ export default function CreateRescuePage() {
     const errs = validateFood(rows);
     setFoodErrs(errs);
     if (Object.keys(errs).length === 0) setStep(2);
+    else toastError("Check the food names and serving quantities.");
   }
 
   function nextFromHandling() {
@@ -365,6 +361,7 @@ export default function CreateRescuePage() {
     if (!holding) errs.holding = "Choose how the food was held.";
     setHandErrs(errs);
     if (Object.keys(errs).length === 0) setStep(3);
+    else toastError(errs.untouched ?? errs.holding);
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -372,7 +369,7 @@ export default function CreateRescuePage() {
     if (step !== 3) return;
     const errs = validateTiming(prepared, pickup, attest);
     setTimingErrs(errs);
-    if (Object.keys(errs).length > 0) return;
+    if (Object.keys(errs).length > 0) return toastError(Object.values(errs)[0]);
     create.mutate();
   }
 
@@ -383,12 +380,10 @@ export default function CreateRescuePage() {
       <form onSubmit={onSubmit} noValidate className="mx-auto flex max-w-2xl flex-col gap-6">
         {/* Step bar */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="rounded-2xl border border-border bg-surface px-4 py-3">
             <StepBar step={step} />
-            {draftSaved && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-primary animate-fade-in"><Check className="h-3.5 w-3.5" aria-hidden="true"/>Draft saved</span>
-            )}
           </div>
+          <span className={`-mt-2 flex min-h-4 items-center justify-end gap-1.5 text-xs text-primary ${draftSaved ? "" : "invisible"}`}><Check className="h-3.5 w-3.5" aria-hidden="true"/>Draft saved</span>
         </div>
 
         {/* ── STEP 1: Food ── */}
@@ -625,20 +620,6 @@ export default function CreateRescuePage() {
               {handErrs.holding && <p className="text-sm text-urgent">{handErrs.holding}</p>}
             </fieldset>
 
-            <label className="flex min-h-[44px] items-center gap-3 text-sm text-ink">
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded accent-primary"
-                checked={packaging}
-                onChange={(e) => setPackaging(e.target.checked)}
-              />
-              Packaging / containers are available for transfer
-            </label>
-            <label className="flex min-h-11 items-center gap-3 text-sm">
-              <input type="checkbox" checked={delivery} onChange={event => setDelivery(event.target.checked)}/>
-              Our team can deliver the donation
-            </label>
-
             <div className="flex flex-col gap-1">
               <label htmlFor="notes" className="text-sm font-medium text-ink">
                 Notes (optional)
@@ -656,7 +637,6 @@ export default function CreateRescuePage() {
               <p className="text-xs text-muted">{notes.length}/500</p>
             </div>
 
-            <SafetyNotice />
           </section>
         )}
 

@@ -1,4 +1,5 @@
 export interface DonationRecognition {
+  issuer_role?: "ADMIN" | "RECEIVER";
   rescue_id: string;
   display_id: string;
   public_token: string;

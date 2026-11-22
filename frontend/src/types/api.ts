@@ -154,6 +154,8 @@ export interface MatchCandidate {
 }
 
 export interface OfferAvailable {
+  portion_only?: boolean;
+  suggested_servings?: number;
   donor_name: string;
   donor_id: string;
   rank_badge: string;

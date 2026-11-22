@@ -36,10 +36,14 @@ export default function ContributionPage() {
   function exportLedger(){
     if(!d)return;
     const csv=["Rescue,Confirmed UTC,Meals,Kindness coins (no cash value)",...d.ledger.map(r=>`${r.display_id},${r.at},${r.meals},${r.coins}`)].join("\r\n");
-    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="RescueRelay-contribution-ledger.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-    setNotice("Exported the latest 100 confirmed rescues. Lifetime totals include all rescues.");
+    try {
+      const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="RescueRelay-contribution-ledger.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      toast.success("Coin activity exported.");
+    } catch {
+      toast.error("Could not export coin activity.");
+    }
   }
-  async function copyStory(){if(!d)return;try{await navigator.clipboard.writeText(`${d.organization_name} helped ${receiver?"receive and distribute":"share"} ${d.impact.total_meals_rescued} confirmed meal servings through ${d.impact.completed_rescues} food rescues. ${d.coins} kindness coins recognize this contribution. ${d.medal}. Food-weight estimate: ${d.impact.food_kg_estimate} kg at 0.4 kg per meal. Synthetic RescueRelay demo; coins have no cash value.`);setNotice("Community story copied. Review it before publishing.");}catch{setNotice("Clipboard is unavailable. Your figures are shown below.");}}
+  async function copyStory(){if(!d)return;try{await navigator.clipboard.writeText(`${d.organization_name} helped ${receiver?"receive and distribute":"share"} ${d.impact.total_meals_rescued} confirmed meal servings through ${d.impact.completed_rescues} food rescues. ${d.coins} kindness coins recognize this contribution. ${d.medal}. Food-weight estimate: ${d.impact.food_kg_estimate} kg at 0.4 kg per meal. Synthetic RescueRelay demo; coins have no cash value.`);setNotice("Community story copied. Review it before publishing.");}catch{toast.error("Could not copy your community story.");}}
   const tools=receiver?[
     {title:"Allocation planner",to:"/receiver/planner",icon:HeartHandshake},
     {title:"Appreciation",to:"/recognition",icon:Sparkles},

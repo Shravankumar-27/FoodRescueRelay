@@ -5,19 +5,18 @@ import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Map, List, Clock, MapPin, Utensils, AlertCircle, CheckCircle2, Check, PauseCircle, Truck } from "lucide-react";
+import { Map, List, MapPin, Utensils, CheckCircle2, Check, PauseCircle, Truck } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import Chip from "../../components/ui/Chip";
 import EmptyState from "../../components/ui/EmptyState";
 import Skeleton from "../../components/ui/Skeleton";
 import RescueClock from "../../components/rescue/RescueClock";
 import SafetyNotice from "../../components/rescue/SafetyNotice";
 import FavoritePartner, { useFavoritePartners } from "../../components/partners/FavoritePartner";
 import { useAuth } from "../../features/auth/AuthContext";
+import { useToast } from "../../features/toast/ToastContext";
 import { ApiError, apiRequest } from "../../lib/api";
-import { formatMinutes } from "../../lib/format";
 import type { CapacityData, OfferAvailable, ReceiverHistoryItem, ImpactSummary } from "../../types/api";
 import { lazy, Suspense } from "react";
 
@@ -58,21 +57,6 @@ function urgencyColor(pickupBy: string) {
   return { bar: "bg-urgent animate-pulse", text: "text-urgent", label: `${Math.floor(mins)} min — urgent!` };
 }
 
-function MatchScoreBar({ label, score }: { label: string; score: number }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-20 shrink-0 text-muted truncate">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-background">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${Math.round(score * 100)}%` }}
-        />
-      </div>
-      <span className="w-8 text-right text-muted">{Math.round(score * 100)}%</span>
-    </div>
-  );
-}
-
 function OfferCard({
   offer,
   onClaim,
@@ -85,134 +69,59 @@ function OfferCard({
   busy: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const remaining = Math.max(0, Math.ceil((new Date(offer.expires_at).getTime() - now) / 1000));
+  const remaining = Math.max(0, Math.ceil((new Date(offer.pickup_by).getTime() - now) / 1000));
   const urgency = urgencyColor(offer.pickup_by);
 
-  return (
-    <Card className="relative overflow-hidden">
-      {/* Urgency colour bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 ${urgency.bar}`} />
-
-      <div className="flex flex-col gap-3 pt-1">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted shrink-0" />
-              <h3 className="font-semibold text-ink">{offer.donor_name || offer.locality}</h3>
-            </div>
-            <p className="text-xs text-muted mt-0.5">{offer.locality} · {offer.rank_badge} partner · address after acceptance</p>
-          </div>
-          <FavoritePartner id={offer.donor_id} name={offer.donor_name}/>
-        </div>
-
-        {/* Key stats row */}
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-1.5">
-            <Utensils className="h-4 w-4 text-primary" />
-            <span className="font-bold text-ink">{offer.total_servings}</span>
-            <span className="text-muted">servings</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MapPin className="h-4 w-4 text-info" />
-            <span className="font-medium">{offer.estimated_distance_km} km away</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-muted" />
-            <span className="text-muted">{formatMinutes(offer.estimated_travel_minutes)} travel</span>
-          </div>
-        </div>
-
-        {/* Food list */}
-        <ul className="text-sm text-muted space-y-0.5">
-          {offer.food_items.map((item) => (
-            <li key={item.name} className="flex items-center gap-2">
-              <span className="text-ink font-medium">{item.name}</span>
-              <span>({item.dietary_type.replace("_", "-")})</span>
-            </li>
-          ))}
-        </ul>
-
-        <Link to={`/messages?partner=${offer.donor_id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">Ask the donor about this food</Link>
-        {/* Handling */}
-        <p className="flex items-center gap-2 text-sm text-muted"><HandlingIcon type={offer.handling_type}/>{handlingLabel(offer.handling_type)}</p>
-
-        {/* Allergens */}
-        {offer.food_items.some((i) => i.allergen_info_unknown) ? (
-          <div className="flex items-center gap-2 text-sm text-warn">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>Allergen info unavailable — assess independently</span>
-          </div>
-        ) : offer.food_items.some((i) => i.allergens.length > 0) ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-ink">Allergens:</span>
-            {offer.food_items.flatMap((i) => i.allergens).map((a) => (
-              <Chip key={a} tone="warn">{a}</Chip>
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 text-sm text-fresh">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>No allergens listed</span>
-          </div>
-        )}
-
-        {/* Match score breakdown (expandable) */}
-        {offer.why && offer.why.length > 0 && (
-          <div>
-            <button
-              type="button"
-              onClick={() => setExpanded(!expanded)}
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              {expanded ? "Hide" : "Show"} match details
-            </button>
-            {expanded && (
-              <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-background p-3">
-                <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Why you matched</p>
-                <MatchScoreBar label="Proximity" score={offer.factors?.proximity ?? 0} />
-                <MatchScoreBar label="Current need" score={offer.factors?.need ?? 0} />
-                <MatchScoreBar label="Time window" score={offer.factors?.urgency ?? 0} />
-                {offer.why.map((w) => (
-                  <p key={w} className="flex items-start gap-1.5 text-xs text-muted"><Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true"/>{w}</p>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Timer */}
-        <div className="flex items-center gap-2">
-          <RescueClock pickupBy={offer.pickup_by} />
-          <span className={`text-sm font-semibold ${remaining < 30 ? "text-urgent animate-pulse" : "text-muted"}`}>
-            {offer.is_direct_offer ? `Priority invitation: ${Math.floor(remaining / 60)}m ${remaining % 60}s` : "Open to compatible receivers"}
-          </span>
-        </div>
-
-        <SafetyNotice />
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="primary" onClick={onClaim} disabled={busy || remaining === 0} className="min-h-[44px] flex-1">
-            <Check className="h-4 w-4" aria-hidden="true"/>Accept rescue
-          </Button>
-          <Button variant="secondary" onClick={onDecline} disabled={busy} className="min-h-[44px]">
-            Can&apos;t take this
-          </Button>
-        </div>
+  const allergens = [...new Set(offer.food_items.flatMap(item => item.allergens))];
+  const unknownAllergens = offer.food_items.some(item => item.allergen_info_unknown);
+  return <Card className="relative flex h-full flex-col gap-3 overflow-hidden pt-5">
+    <div className={`absolute inset-x-0 top-0 h-1 ${urgency.bar}`}/>
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <h3 className="font-bold">{offer.donor_name}</h3>
+        <p className="flex items-center gap-1 text-xs text-muted"><MapPin size={14}/>{offer.locality} · {offer.estimated_distance_km} km</p>
       </div>
-    </Card>
-  );
+      <FavoritePartner id={offer.donor_id} name={offer.donor_name}/>
+    </div>
+    <div className="grid grid-cols-2 gap-2 rounded-xl bg-background p-2 text-sm">
+      <span className="flex items-center gap-1.5"><Utensils size={16} className="text-primary"/>
+        {offer.portion_only ? `Up to ${offer.suggested_servings} servings` : `${offer.total_servings} servings`}
+      </span>
+      <span className="justify-self-end"><RescueClock pickupBy={offer.pickup_by}/></span>
+    </div>
+    <div>
+      <p className="text-sm font-semibold">{offer.food_items.map(item => item.name).join(", ")}</p>
+      <p className="mt-1 flex items-center gap-2 text-xs text-muted"><HandlingIcon type={offer.handling_type}/>{handlingLabel(offer.handling_type)}</p>
+      {(unknownAllergens || allergens.length > 0) && <p className="mt-1 text-xs text-warn">
+        {[allergens.length ? `Listed allergens: ${allergens.join(", ")}` : "", unknownAllergens ? "Some allergens unknown" : ""].filter(Boolean).join(" · ")}
+      </p>}
+    </div>
+    <details className="text-sm"><summary className="cursor-pointer font-semibold text-primary">Food and pickup details</summary>
+      <ul className="my-2 list-inside list-disc text-muted">{offer.food_items.map((item, index) => <li key={index}>
+        {item.name} · {foodLabel(item.dietary_type)} · {item.quantity_servings} posted
+      </li>)}</ul>
+      {offer.handling_notes && <p className="mb-2">{offer.handling_notes}</p>}
+      <SafetyNotice/>
+      <Link to={`/messages?partner=${offer.donor_id}`} className="mt-2 inline-block font-semibold text-primary">Message donor</Link>
+    </details>
+    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border pt-3">
+      {offer.portion_only ? <Link to={`/messages?partner=${offer.donor_id}`} className="view-toggle bg-primaryLight">Ask for a portion</Link>
+        : <Button variant="primary" onClick={onClaim} disabled={busy || remaining === 0}><Check size={16}/>Accept rescue</Button>}
+      {!offer.portion_only && <Button variant="ghost" onClick={onDecline} disabled={busy}>Decline</Button>}
+      {offer.is_direct_offer && !offer.portion_only && <span className="ml-auto text-xs font-semibold text-primary">Priority offer</span>}
+    </div>
+  </Card>;
 }
 
 export default function ReceiverHomePage() {
   const { token } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [diet, setDiet] = useState("");
@@ -235,9 +144,10 @@ export default function ReceiverHomePage() {
 
   const offersQuery = useQuery({
     queryKey: ["receiver", "offers"],
-    queryFn: () => apiRequest<OfferAvailable[]>("/offers/available", { token }),
+    queryFn: () => apiRequest<OfferAvailable[]>("/offers/available?include_portions=true", { token }),
     enabled: !!token,
     refetchInterval: OFFER_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
   const toggleMutation = useMutation({
@@ -297,6 +207,7 @@ export default function ReceiverHomePage() {
       }),
     onSuccess: (_data, offerId) => {
       setClosed((prev) => ({ ...prev, [offerId]: "You declined this rescue." }));
+      toast.success("Offer declined.");
       queryClient.invalidateQueries({ queryKey: ["receiver", "offers"] });
     },
   });
@@ -307,7 +218,7 @@ export default function ReceiverHomePage() {
   const capacity = capacityQuery.data;
   const known = offersQuery.data ?? [];
   const areas = [...new Set(known.map(offer => offer.locality).filter(Boolean))].sort();
-  const offers = known.filter(offer => !closed[offer.id] && (!area || offer.locality === area)
+  const offers = known.filter(offer => !closed[`open_${offer.rescue_id}`] && (!area || offer.locality === area)
     && (!favoritesOnly || favorites.data?.some(partner => partner.id === offer.donor_id))
     && offer.food_items.some(item => (!diet || item.dietary_type === diet) && (!category || item.food_category === category)));
   const activePickups = (history.data ?? []).filter(r => ["CLAIMED", "COLLECTED"].includes(r.status));
@@ -437,29 +348,24 @@ export default function ReceiverHomePage() {
 
             {offersQuery.isLoading ? (
               <Skeleton className="h-48 w-full" />
-            ) : offers.length === 0 && Object.keys(closed).length === 0 ? (
+            ) : offers.length === 0 ? (
               <EmptyState
                 title="No rescues need you right now"
                 body="Check your availability or change the filters."
               />
             ) : (
-              <div className="grid items-start gap-4 xl:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2">
                 {offers.map((offer) => (
                   <OfferCard
-                    key={offer.id}
+                    key={offer.rescue_id}
                     offer={offer}
                     busy={
-                      (claimMutation.isPending && activeOfferId === offer.id) ||
+                      (claimMutation.isPending && activeOfferId === `open_${offer.rescue_id}`) ||
                       declineMutation.isPending
                     }
-                    onClaim={() => claimMutation.mutate(offer.id)}
-                    onDecline={() => declineMutation.mutate(offer.id)}
+                    onClaim={() => claimMutation.mutate(`open_${offer.rescue_id}`)}
+                    onDecline={() => declineMutation.mutate(`open_${offer.rescue_id}`)}
                   />
-                ))}
-                {Object.entries(closed).map(([id, msg]) => (
-                  <Card key={id}>
-                    <p className="text-sm text-muted">{msg}</p>
-                  </Card>
                 ))}
               </div>
             )}

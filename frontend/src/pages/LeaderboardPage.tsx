@@ -1,48 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Coins } from "lucide-react";
+import { Trophy } from "lucide-react";
 import AppShell from "../components/layout/AppShell";
 import Card from "../components/ui/Card";
-import Skeleton from "../components/ui/Skeleton";
 import { useAuth } from "../features/auth/AuthContext";
 import { apiRequest } from "../lib/api";
 import type { LeaderboardData } from "../types/api";
-
 export default function LeaderboardPage() {
   const { token, user } = useAuth();
-  const [tab, setTab] = useState<"donors" | "receivers">(user?.role === "RECEIVER" ? "receivers" : "donors");
+  const [tab, setTab] = useState<"donors" | "receivers">("donors");
   const [area, setArea] = useState("");
-  const data = useQuery({ queryKey: ["leaderboard"],
-    queryFn: () => apiRequest<LeaderboardData>("/impact/leaderboard", { token }), refetchInterval: 30000 });
+  const data = useQuery({ queryKey: ["leaderboard"], queryFn: () => apiRequest<LeaderboardData>("/impact/leaderboard", { token }), refetchInterval: 30000 });
   const rows = data.data?.[tab] ?? [];
-  const filtered = rows.filter(row => !area || row.locality === area);
-
-  return <AppShell title="Community rankings" nav={user?.role === "DONOR" ? "donor" : user?.role === "ADMIN" ? "admin" : "receiver"}>
-    <div className="mb-4 flex flex-wrap items-center gap-2">
-      {(["donors", "receivers"] as const).map(role => <button key={role} aria-pressed={tab === role} onClick={() => {
-        setTab(role); setArea("");
-      }} className={`view-toggle ${tab === role ? "selected" : ""}`}>{role === "donors" ? "Donors" : "Receivers"}</button>)}
-      <select aria-label="Ranking locality" value={area} onChange={event => setArea(event.target.value)} className="ml-auto">
-        <option value="">All localities</option>{[...new Set(rows.map(row => row.locality))].sort().map(location => <option key={location}>{location}</option>)}
-      </select>
-    </div>
-    <p className="mb-3 text-sm text-muted">Ranked by confirmed meals. Every confirmed meal earns 10 kindness coins.</p>
-    {data.isPending ? <Skeleton className="h-56 w-full"/> : data.isError && !data.data ?
-      <button className="view-toggle" onClick={() => void data.refetch()}>Retry rankings</button> :
-      !filtered.length ? <Card>No partners in this area.</Card> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((row, index) => <Card key={row.name}>
-          <div className="flex items-start gap-2">
-            <span className={`rounded-lg px-2 py-1 text-sm font-bold ${index < 3 ? "bg-accentLight text-warn" : "bg-background text-primary"}`}>#{index + 1}</span>
-            <div><h3 className="font-bold">{row.name}</h3><p className="text-xs text-muted">{row.locality} · {row.badge}</p></div>
-          </div>
-          <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-2">
-            <div><dt className="text-xs text-muted">Meals delivered</dt><dd className="text-lg font-bold">{row.meals.toLocaleString("en-IN")}</dd></div>
-            <div><dt className="text-xs text-muted">Kindness coins</dt><dd className="flex items-center gap-1 text-lg font-bold"><Coins size={16}/>{row.kindness_coins.toLocaleString("en-IN")}</dd></div>
-          </dl>
-          {(row.rating || row.contribution_medal) && <p className="mt-2 text-xs text-muted">
-            {[row.contribution_medal, row.rating ? `${row.rating}/5 (${row.rating_count} ratings)` : ""].filter(Boolean).join(" · ")}
-          </p>}
-        </Card>)}
-      </div>}
-  </AppShell>;
+  const filtered = rows.filter(r => !area || r.locality === area);
+  return <AppShell title="Community rankings" nav={user?.role === "DONOR" ? "donor" : user?.role === "ADMIN" ? "admin" : "receiver"}><section className="harvest-hero mb-5"><Trophy className="mb-3 text-amber-300"/><p className="eyebrow text-white/70">Every handoff matters</p><h2 className="mt-2 text-3xl font-bold">Meet the people making it happen.</h2><p className="mt-3 text-sm text-white/80">Ranked by receiver-confirmed meals, then trust. Real activity from our synthetic demo network.</p></section><div className="mb-4 flex flex-wrap items-center gap-2">{(["donors","receivers"] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => { setTab(t); setArea(""); }} className={`view-toggle ${tab === t ? "selected" : ""}`}>Top {t}</button>)}<select aria-label="Filter rankings by locality" value={area} onChange={e => setArea(e.target.value)} className="ml-auto"><option value="">All localities</option>{[...new Set(rows.map(r => r.locality))].map(a => <option key={a}>{a}</option>)}</select></div>{data.isError && <button type="button" className="view-toggle mb-3" onClick={() => void data.refetch()}>Retry rankings</button>}{data.isPending ? <p>Loading rankings…</p> : filtered.length === 0 ? <Card>No partners in this area yet.</Card> : <div className="space-y-3">{filtered.map((r,i) => <Card key={r.name} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_minmax(6rem,.45fr)_minmax(7rem,.65fr)] sm:gap-4"><span className={`flex h-11 w-11 items-center justify-center rounded-xl font-extrabold ${i === 0 ? "bg-accentLight text-warn" : "bg-background text-primary"}`}>#{i+1}</span><div className="min-w-0 break-words"><h3 className="font-bold">{r.name}</h3><p className="mt-1 text-sm text-muted">{r.locality} · {r.badge} trust tier</p>{r.contribution_medal&&<p className="mt-2 text-xs font-semibold text-amber-800">{r.contribution_medal} · {r.kindness_coins.toLocaleString("en-IN")} kindness coins</p>}</div><div className="col-start-2 sm:col-auto"><p className="text-xl font-extrabold">{r.meals.toLocaleString("en-IN")}</p><p className="text-sm text-muted">meals delivered</p></div><div className="col-start-2 text-sm sm:col-auto"><p>{r.completion_rate === null ? "No completed outcomes" : `${Math.round(r.completion_rate*100)}% completion`}</p><p className="mt-1 text-muted">{r.rating ? `${r.rating}/5 · ${r.rating_count} reviews` : "No handoff ratings yet"}</p></div></Card>)}</div>}<Card className="mt-5 text-sm text-muted"><h3 className="mb-2 font-bold text-ink">What recognition means</h3><p className="mb-3">Contribution medals recognize confirmed delivered meals: 10 coins per meal. These points have no cash value and never affect food access. Trust tiers below are a separate measure.</p><p>Trust combines completed outcomes (40%), demo reliability (30%) and handoff ratings (30%). Gold ≥ 85%, silver ≥ 70%, bronze ≥ 50%. New partners stay NEW until they have completed outcomes. Missing feedback uses a neutral baseline. Ratings describe handoff experience, not food safety or independent place reviews.</p></Card></AppShell>;
 }

@@ -10,6 +10,7 @@ import {
 import { ApiError, apiRequest } from "../../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LoginData, MeData, OrganizationOut, UserOut } from "../../types/api";
+import { useToast } from "../toast/ToastContext";
 
 const STORAGE_KEY = "rr.session";
 
@@ -53,6 +54,7 @@ function writeSession(session: Session | null): void {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { error: toastError } = useToast();
   const [initial] = useState<Session | null>(() => readSession());
   const [session, setSession] = useState<Session | null>(initial);
   const [isReady, setIsReady] = useState<boolean>(initial === null);
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           writeSession(null);
           setSession(null);
         }
+        toastError(err instanceof Error ? err.message : "Could not verify your session.");
       })
       .finally(() => {
         if (!cancelled) {
@@ -89,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [initial]);
+  }, [initial, toastError]);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginData> => {
     const data = await apiRequest<LoginData>("/auth/login", {

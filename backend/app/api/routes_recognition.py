@@ -1,4 +1,4 @@
-"""Recognition is issued only by the receiver that confirmed the delivery.
+"""Appreciation issued by receiving organizations or RescueRelay administrators.
 
 The public response is an allowlist: no addresses, contacts, user identities,
 pickup codes or beneficiary details. Revoked acknowledgements cannot be verified.
@@ -37,7 +37,9 @@ class RecognitionIn(BaseModel):
 def _delivered(db, rescue_id, user):
     rescue = db.get(Rescue, rescue_id)
     impact = db.scalar(select(ImpactRecord).where(ImpactRecord.rescue_id == rescue_id))
-    if not rescue or rescue.status != "DELIVERED" or not impact or user.organization_id not in (impact.donor_organization_id, impact.receiver_organization_id):
+    if not rescue or rescue.status != "DELIVERED" or not impact or (
+        user.role != "ADMIN" and user.organization_id not in (impact.donor_organization_id, impact.receiver_organization_id)
+    ):
         raise AppError("RECOGNITION_NOT_FOUND", "A completed donation for your organization was not found.", 404)
     return rescue, impact
 
@@ -45,6 +47,8 @@ def _delivered(db, rescue_id, user):
 def _serialize(db, row, rescue=None, impact=None):
     rescue = rescue or db.get(Rescue, row.rescue_id)
     impact = impact or db.scalar(select(ImpactRecord).where(ImpactRecord.rescue_id == row.rescue_id))
+    issuer = db.get(User, row.issued_by_user_id)
+    platform_issued = issuer is not None and issuer.role == "ADMIN"
     return {
         "rescue_id": str(rescue.id), "display_id": rescue.display_id,
         "public_token": str(row.public_token), "donor_name": row.donor_name,
@@ -52,7 +56,9 @@ def _serialize(db, row, rescue=None, impact=None):
         "delivered_at": iso_utc(impact.created_at), "issued_at": iso_utc(row.issued_at),
         "people_served": row.people_served, "food_rating": row.food_rating, "message": row.message,
         "status": "WITHDRAWN" if row.withdrawn_at else "ISSUED", "demo": True,
-        "disclaimer": "Receiver-issued appreciation for a confirmed donation. Food feedback is subjective, not a food-safety, legal or tax certification. Synthetic demo data.",
+        "issuer_role": "ADMIN" if platform_issued else "RECEIVER",
+        "disclaimer": ("RescueRelay-issued" if platform_issued else "Receiver-issued")
+        + " appreciation for a confirmed donation. Food feedback is subjective, not a food-safety, legal or tax certification. Synthetic demo data.",
     }
 
 
@@ -65,10 +71,22 @@ def get_recognition(rescue_id: uuid.UUID, request: Request, db: DbSession, user:
 
 @router.post("/rescues/{rescue_id}/recognition")
 def issue(rescue_id: uuid.UUID, body: RecognitionIn, request: Request, db: DbSession, user: User = Depends(require_roles(UserRole.RECEIVER))):
+    return _publish(rescue_id, body, request, db, user)
+
+
+@router.post("/admin/recognition/{rescue_id}")
+def admin_issue(rescue_id: uuid.UUID, body: RecognitionIn, request: Request, db: DbSession,
+                user: User = Depends(require_roles(UserRole.ADMIN))):
+    if body.people_served is not None or body.food_rating is not None:
+        raise AppError("RECEIVER_FEEDBACK_REQUIRED", "Only the receiving organization can report feedback or people served.", 422)
+    return _publish(rescue_id, body, request, db, user)
+
+
+def _publish(rescue_id, body, request, db, user):
     # Serialize concurrent issue/withdraw requests for this delivery.
     db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
     rescue, impact = _delivered(db, rescue_id, user)
-    if user.organization_id != impact.receiver_organization_id:
+    if user.role != "ADMIN" and user.organization_id != impact.receiver_organization_id:
         raise AppError("RECOGNITION_NOT_FOUND", "Only the receiving organization can issue this recognition.", 404)
     if not body.consent_to_publish:
         raise AppError("PUBLICATION_CONSENT_REQUIRED", "Confirm permission to share this acknowledgement publicly.", 422)
@@ -83,7 +101,7 @@ def issue(rescue_id: uuid.UUID, body: RecognitionIn, request: Request, db: DbSes
             raise AppError("ALREADY_ISSUED", "Withdraw the existing acknowledgement before issuing corrected details.", 409)
         return ok(_serialize(db, row, rescue, impact), request.state.request_id)
     if row is None:
-        row = DonationRecognition(rescue_id=rescue_id, receiver_organization_id=user.organization_id)
+        row = DonationRecognition(rescue_id=rescue_id, receiver_organization_id=impact.receiver_organization_id)
         db.add(row)
     row.issued_by_user_id = user.id
     row.public_token = uuid.uuid4()
@@ -91,7 +109,7 @@ def issue(rescue_id: uuid.UUID, body: RecognitionIn, request: Request, db: DbSes
     row.food_rating = body.food_rating
     row.message = body.message
     row.donor_name = db.get(Organization, impact.donor_organization_id).name
-    row.receiver_name = user.organization.name
+    row.receiver_name = db.get(Organization, impact.receiver_organization_id).name
     row.issued_at = utcnow()
     row.withdrawn_at = None
     db.commit()
@@ -100,14 +118,47 @@ def issue(rescue_id: uuid.UUID, body: RecognitionIn, request: Request, db: DbSes
 
 @router.post("/rescues/{rescue_id}/recognition/withdraw")
 def withdraw(rescue_id: uuid.UUID, request: Request, db: DbSession, user: User = Depends(require_roles(UserRole.RECEIVER))):
+    return _withdraw(rescue_id, request, db, user)
+
+
+@router.post("/admin/recognition/{rescue_id}/withdraw")
+def admin_withdraw(rescue_id: uuid.UUID, request: Request, db: DbSession,
+                   user: User = Depends(require_roles(UserRole.ADMIN))):
+    return _withdraw(rescue_id, request, db, user)
+
+
+def _withdraw(rescue_id, request, db, user):
     db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
     _delivered(db, rescue_id, user)
-    row = db.scalar(select(DonationRecognition).where(DonationRecognition.rescue_id == rescue_id, DonationRecognition.receiver_organization_id == user.organization_id))
+    row = db.scalar(select(DonationRecognition).where(DonationRecognition.rescue_id == rescue_id))
     if not row:
         raise AppError("RECOGNITION_NOT_FOUND", "Acknowledgement not found.", 404)
+    issuer = db.get(User, row.issued_by_user_id)
+    if (user.role == "ADMIN" and issuer.role != "ADMIN") or (
+        user.role == "RECEIVER" and (issuer.role == "ADMIN" or row.receiver_organization_id != user.organization_id)
+    ):
+        raise AppError("RECOGNITION_FORBIDDEN", "The certificate must be withdrawn by its issuing organization.", 403)
     row.withdrawn_at = row.withdrawn_at or utcnow()
     db.commit()
     return ok({"status": "WITHDRAWN"}, request.state.request_id)
+
+
+@router.get("/admin/recognition")
+def admin_recognition(request: Request, db: DbSession, code: str = "",
+                      user: User = Depends(require_roles(UserRole.ADMIN))):
+    query = (select(Rescue, ImpactRecord, DonationRecognition)
+             .join(ImpactRecord, ImpactRecord.rescue_id == Rescue.id)
+             .outerjoin(DonationRecognition, DonationRecognition.rescue_id == Rescue.id)
+             .where(Rescue.status == "DELIVERED", ImpactRecord.delivered_servings > 0))
+    if code.strip():
+        query = query.where(Rescue.display_id.icontains(code.strip(), autoescape=True))
+    rows = db.execute(query.order_by(ImpactRecord.created_at.desc()).limit(100)).all()
+    return ok([{
+        "id": str(rescue.id), "display_id": rescue.display_id, "servings": impact.delivered_servings,
+        "donor": db.get(Organization, impact.donor_organization_id).name,
+        "receiver": db.get(Organization, impact.receiver_organization_id).name,
+        "certificate": _serialize(db, row, rescue, impact) if row else None,
+    } for rescue, impact, row in rows], request.state.request_id)
 
 
 @router.get("/recognition/verify/{token}")
