@@ -1,204 +1,127 @@
-# RescueRelay — Rescue the Surplus
+# RescueRelay
 
-> **Codebenders ACE Builders' Hackathon 2026 · Problem Statement 2: Society and Environment**
+**Codebenders ACE Builders’ Hackathon 2026 · Problem Statement 2 · Society and Environment**
 
-A platform that connects surplus food from caterers, event venues, and restaurants to NGOs, community kitchens, and shelters in Hyderabad — within a short time window, with full traceability.
+RescueRelay coordinates time-sensitive surplus food donations in Hyderabad. Caterers and event venues post untouched surplus, nearby community kitchens and shelters claim compatible donations, and both sides track the pickup through confirmed delivery. The app records actual delivered servings and explains how it estimates food weight and climate impact.
 
----
+**Judging the project?** Start with the scoring guide and live walkthrough. [Hackathon judge guide](JUDGE_GUIDE.md)
 
-## 🍽️ Problem
+## The problem
 
-India wastes an estimated **68.7 million tonnes** of food per year. Catering events routinely have 20–40% surplus. Meanwhile, millions go hungry. The gap isn't food — it's **coordination, trust, and speed**.
+At the end of an event, a caterer needs to find a receiver before the pickup deadline. The receiver needs to know whether the food fits its dietary requirements, available capacity, storage and transport. A phone call can arrange a pickup, but it leaves those checks and delivery confirmation spread across conversations. RescueRelay keeps those decisions and the handoff record on one listing.
 
-## ✅ Solution
+| User | What they do in RescueRelay |
+| --- | --- |
+| **Donor** | Post surplus, check matches, coordinate supplies, share the pickup code and review delivery outcomes. |
+| **Receiver** | Set capacity and food preferences, find compatible offers, claim a pickup and report delivered and rejected servings. |
+| **Coordinator** | Review partner status, monitor rescue activity, manage the logistics provider directory and issue appreciation certificates for confirmed deliveries. |
 
-RescueRelay is a web platform (mobile-first PWA) that:
-1. Lets donors post surplus in **under 60 seconds**
-2. **Smart-matches** the nearest eligible receiver by distance, capacity, timing, and need
-3. Coordinates **pickup with live status** (Posted → Matching → Offered → Claimed → Collected → Delivered)
-4. Shows **transparent impact** (meals rescued, CO₂e avoided) with assumptions one click away
-5. Enforces **food safety guardrails** — mandatory handling info, safety attestation, and receiver checklist
+## How a rescue works
 
-> **City focus**: Hyderabad, Telangana. Donor type: caterers and wedding/event venues.
+1. **Post.** Enter food items and quantities, dietary and allergen details, holding conditions and preparation time. Smart paste can prefill fields for review. The app computes a consume-by estimate using editable, unverified hold-time defaults and caps pickup to leave time for delivery.
+2. **Match and dispatch.** The backend checks eligibility and scores compatible receivers. Priority offers rotate on expiry or decline, while eligible receivers can also claim through the discovery feed. At 40% of the pickup window, an unclaimed listing widens its search from 15 km to 25 km and can trigger in-app notifications. At 70%, it is marked urgent.
+3. **Claim and collect.** A successful claim reserves capacity and reveals the exact pickup address to the assigned receiver. The receiver checks in, confirms logistics and pickup checks, enters the donor’s four-digit code, and records the collected quantity. A missed check-in releases the claim and reopens matching while time remains.
+4. **Deliver and report.** The receiver records delivered and rejected quantities. Only confirmed delivered servings count toward meal impact. The donor can open a shareable event report for that delivery. Status updates appear in the rescue timeline.
 
----
+**Lifecycle** · Posted → Matching → Offered → Claimed → Collected → Delivered. A listing can also be cancelled or expire, and a released claim can return to matching.
 
-## 🏗️ Architecture
+## Features by area
 
-```
-frontend/          React 18 · TypeScript · Vite · TailwindCSS 3
-  src/
-    pages/         Role-based pages (donor/, receiver/, admin/)
-    components/    Shared UI + Leaflet map + impact components
-    features/      Auth (JWT) · Toast notifications
-    lib/           API client · format helpers
+| Area | What the demo supports |
+| --- | --- |
+| Donor operations | Mobile-friendly posting wizard, draft recovery, rule-based smart paste, repeat-last listing, weekly templates, event-end reminders and rescue history. |
+| Receiver operations | Capacity and food preferences, map and list discovery, explainable matches, pickup logistics, handoff chat, delivery tracking and private group allocation plans with CSV packing lists. |
+| Dispatch and oversight | Background offer expiry and reassignment, one-time spoilage escalation, admin rescue and partner views, logistics directory and an optional fast-forward demo clock. |
+| Allocation | Donors can estimate portions for multiple eligible receivers and send proposals in Messages. Receivers can plan distribution after collection. A standard claim reserves the full posting. |
+| Impact and appreciation | Community and role-specific impact views, donor CSV, address-free event reports, browser PDF export, optional feedback, appreciation posters and non-cash recognition milestones. |
+| Business pack | Pricing and donor ROI, sponsor pledges and sample impact, a neighbourhood coverage heatmap, editable unit economics and a separate page for real pilot conversation notes. |
 
-backend/           FastAPI · SQLAlchemy 2 · SQLite (default) / PostgreSQL
-  app/
-    api/           REST routes (rescues, offers, impact, admin)
-    models/        SQLAlchemy models + enums
-    services/      Matching engine · rescue lifecycle · impact calculations
-    seed/          init_db.py (base) · seed_extended.py (30+ rescues)
-    schemas/       Pydantic v2 request/response schemas
-```
+## Technology and architecture
 
-**Key packages**: `react-leaflet@4` (Leaflet + OSM maps), `recharts` (charts), `lucide-react` (icons), `@tanstack/react-query` v5 (server state), `react-router-dom` v7.
+The React frontend calls the FastAPI REST API under `/api/v1`. The API applies access rules, runs matching and handoff logic, and writes operational records to SQL. A separate dispatch worker uses the same services and database for unattended offer rotation and escalation. The frontend polls for updates.
 
----
+| Layer | Tools and responsibilities |
+| --- | --- |
+| Frontend | React 18, TypeScript and Vite. Tailwind CSS for responsive UI, React Router for role-based routes and TanStack Query for API state and polling. |
+| Maps and charts | Leaflet and React Leaflet for map views. Recharts for trend and impact charts. |
+| API and access | Python 3.11+, FastAPI, Uvicorn and Pydantic v2. JWT sessions, bcrypt password hashing and server-side role and organization checks. |
+| Persistence | SQLAlchemy 2 and Alembic. SQLite for the local demo. PostgreSQL, including Neon configuration, is supported. |
+| Background processing | The dispatch worker evaluates expired offers, unclaimed listings and missed check-ins. A shared demo clock can advance the timeline in an isolated synthetic database. |
+| Verification | Pytest and FastAPI TestClient on the backend. Vitest and Testing Library on the frontend. Docker Compose provides an optional PostgreSQL stack. |
 
-## 🚀 How to Run
+The core data model links organizations and users to rescues, food items, offers, handoffs, status events and impact records. Matching first filters by capacity, food compatibility, timing and other eligibility constraints. It then ranks feasible receivers by proximity (35%), urgency (30%), need (20%), reliability (10%) and fairness (5%).
 
-### Prerequisites
-- Node.js 20+, Python 3.11+
+### Repository map
 
-### Backend
+| Path | Contents |
+| --- | --- |
+| `frontend/src/app/` | Routes and role gates |
+| `frontend/src/pages/` and `frontend/src/components/` | Workflows, dashboards and shared UI |
+| `backend/app/api/` | API routes and authentication dependencies |
+| `backend/app/services/` and `backend/app/models/` | Dispatch, matching, handoff, impact and persistence models |
+| `backend/alembic/` and `backend/app/seed/` | Database migrations and synthetic demo setup |
+| `backend/tests/` and `frontend/src/tests/` | API, service and UI regression tests |
 
-For optional online PostgreSQL, keep your SQLite configuration and add the pooled
-Neon URL to `NEON_DATABASE_URL` in `backend/.env`. Set `DATABASE_TARGET=neon` to
-switch, or `local` to return. See [Neon setup](docs/NEON_DATABASE.md).
+## Run the local demo
 
-```bash
+Use Python 3.11+ and Node.js 20.19+ on the 20.x line or 22.12+. The commands below use Windows PowerShell and a dedicated synthetic database, `backend/data/hackathon-demo.db`. Run the API and worker in separate terminals. Use the same database settings in both.
+
+**Backend** · From the repository root
+
+```powershell
 cd backend
-
-# 1. Create virtual environment
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Configure (uses SQLite by default — no Postgres needed)
-# In backend/.env, comment out DATABASE_URL to use SQLite:
-# DATABASE_URL=sqlite:///./rescuerelay.db   ← already the fallback
-
-# 4. Restore the shared database and enable Git synchronization (once per clone)
-python -m app.db.snapshot install
-python -m alembic upgrade head
-
-# 5. Start server
-uvicorn app.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:DATABASE_TARGET = "local"
+$env:DATABASE_URL = "sqlite:///./data/hackathon-demo.db"
+$env:DEMO_MODE = "true"
+$env:DEMO_CLOCK_ENABLED = "false"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.seed.init_db
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-API docs: http://localhost:8000/docs
+**Dispatch worker** · In a second terminal, from `backend`
 
-The populated development database now travels with Git in `backend/data/shared.sql`.
-Commits export the dataset; pulls restore it with conflict checks and local backups.
-See [database sharing and recovery](docs/SHARED_DATABASE.md) before replacing existing
-local data. For a separate fresh generated dataset, use `python -m app.seed.seed_extended`.
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-# → http://localhost:5173
+```powershell
+$env:DATABASE_TARGET = "local"
+$env:DATABASE_URL = "sqlite:///./data/hackathon-demo.db"
+$env:DEMO_MODE = "true"
+$env:DEMO_CLOCK_ENABLED = "false"
+.\.venv\Scripts\python.exe -m app.workers.dispatch_worker
 ```
 
-### Demo accounts (password: `demo123`)
+**Frontend** · In a third terminal, from `frontend`
 
-| Role     | Email                        |
-|----------|------------------------------|
-| Donor    | donor@rescuerelay.demo       |
-| Receiver | hope@rescuerelay.demo        |
-| Admin    | admin@rescuerelay.demo       |
+```powershell
+npm.cmd ci
+npm.cmd run dev
+```
 
----
+Open the app at [localhost:5173/home](http://localhost:5173/home). The API reference runs at [localhost:8000/docs](http://localhost:8000/docs). This setup uses available ports 5173 and 8000. The Vite proxy defaults to the local API on port 8000.
 
-## 🎬 3-Minute Demo Walkthrough
+All demo accounts use the synthetic password `demo123`.
 
-> Click path for judges — start at http://localhost:5173
+| Role | Demo email |
+| --- | --- |
+| Donor | `donor@rescuerelay.demo` |
+| Receiver | `hope@rescuerelay.demo` |
+| Admin | `admin@rescuerelay.demo` |
 
-### 1. Landing (0:00–0:20)
-- Open `/home` — see the hero with **live meal counter**, how-it-works, role CTAs, safety disclaimer
-- Click **"I'm a Donor"** → login as `donor@rescuerelay.demo` / `demo123`
+For the shared team snapshot, existing databases, Docker, other shells, and clock setup, see the run and database guides. [Runbook](HOW_TO_RUN.md) · [Shared SQLite snapshot](docs/SHARED_DATABASE.md) · [Neon setup](docs/NEON_DATABASE.md)
 
-### 2. Donor flow — post surplus in <60s (0:20–1:10)
-- **Donor Home**: see urgency card, stats, "Repost last listing" button
-- Click **"Post Surplus Food"** (green CTA)
-- **Step 1 (Food)**: tap a food chip (e.g. "🍗 Chicken Biryani") → auto-fills name; use stepper to set quantity (e.g. 100); dietary chips auto-select
-- **Step 2 (Handling)**: select "Yes, untouched"; pick "🔥 Kept hot" handling card
-- **Step 3 (Deadline)**: tap "2 hrs" preset → see live countdown; tick attestation → **Post & Find Match**
-- Toast: "Rescue posted! Finding the best match nearby."
-- **Active Rescue page**: show urgency colour bar, animated timeline, CO₂e estimate
+## Impact, privacy and demo scope
 
-### 3. Receiver flow — accept offer (1:10–1:50)
-- Open new tab → login as `hope@rescuerelay.demo` / `demo123`
-- **Receiver Home**: list/map toggle — switch to **Map view** (Leaflet pins over Madhapur)
-- Switch back to **List** — see offer card with urgency timer, match score breakdown
-- Click **"Show match details"** → proximity/capacity/timing bars
-- Accept → **Active Pickup page**
-  - Tick all 4 checklist items (temp OK, packaging intact, within time, quantity matches)
-  - Enter pickup code (from donor's screen), set collected servings → **Confirm collection**
-  - Toast: "Collected! 100 servings confirmed."
-  - Preview **WhatsApp notification** (demo modal)
-  - Confirm delivery → 🎉 success screen
+- **Impact math.** One confirmed delivered serving counts as one meal. Estimated weight is meals × 0.4 kg. Estimated CO₂e is estimated food weight × 2.5 kg CO₂e per kg of food. A confirmed delivery of 38 servings reports 38 meals, approximately 15.2 kg of food and 38 kg CO₂e on this illustrative model.
+- **Privacy and handling checks.** Demo data is synthetic. Exact pickup addresses are restricted to confirmed handoffs. Event reports shared by link exclude addresses and show only receiving organization names. Hold-time defaults are unverified. The **Verified (ID checked)** badge refers to an admin identity check. Certificates acknowledge contributions only. **Not a food-safety certification.**
+- **Demo boundaries.** Donor templates, reminders, demo pledges and pilot notes use browser storage. Alerts are in-app. Travel times are approximations. Public report links generated on localhost can be opened on the machine running the demo. Pricing, sponsor outcomes and unit economics are illustrative. Billing is inactive.
 
-### 4. Impact & Admin (1:50–2:30)
-- Donor tab → **Impact** page: animated stat cards (meals, kg CO₂e, food weight), bar chart of recent rescues, "How we calculate" with WRAP UK assumption tooltip
-- **Admin** tab → login as `admin@rescuerelay.demo` / `demo123` → Overview: 6 stat cards + weekly trend line chart
+## Tests and further reading
 
-### 5. Business case (2:30–3:00)
-- Share impact card, methodology note
-- Highlight: no tax language, clear "estimates" labels, safety disclaimer on every screen
+Run `python -m pytest` from `backend` using the project’s Python environment. Run `npm test` and `npm run build` from `frontend` (use `npm.cmd` where required in PowerShell). Coverage includes matching, claim concurrency, handoff integrity, deadline escalation, access control, public event report fields and pickup UI transitions.
 
----
-
-## 📐 Assumptions & Constants
-
-All configurable in one place — `backend/app/services/matching_service.py` (matching weights) and `backend/app/services/impact_service.py` (CO₂e formula).
-
-| Assumption | Value | Source |
-|---|---|---|
-| kg per meal | 0.4 kg | Estimate (typical Indian meal portion) |
-| kg CO₂e per kg food waste | 2.5 | WRAP UK (stated assumption) |
-| Matching: proximity weight | 35% | Configurable constant |
-| Matching: urgency weight | 30% | Configurable constant |
-| Matching: need weight | 20% | Configurable constant |
-| Matching: reliability weight | 10% | Configurable constant |
-| Matching: fairness weight | 5% | Configurable constant |
-
----
-
-## 🛡️ Guardrails
-
-| Rule | Implementation |
-|------|----------------|
-| No food safety certification | Disclaimer on every listing, claim, and pickup screen |
-| No tax/legal language | Searched and removed from all UI copy |
-| Synthetic data only | "Sample data" label in every dashboard |
-| Approximate location publicly | Exact address revealed only after claim confirmed |
-| Untouched food only | Blocked at Step 2 if donor selects "served/mixed" |
-| Mandatory safety attestation | Cannot post without ticking attest checkbox |
-| Receiver collection checklist | 4-item checklist before code entry is unlocked |
-
----
-
-## 🔭 Future Scope
-
-- **Real-time** via WebSockets (currently polls every 3–5 s)
-- **Push notifications** (PWA + Firebase)
-- **Volunteer / driver** role with route optimisation
-- **Multilingual** (Hindi / Telugu) — stubs in place
-- **PostgreSQL** production deployment with connection pooling
-- **Rating system** (two-way, post-delivery)
-- **CSR sponsor dashboard** with live meal-sponsorship counter
-- **City-level heatmap** for municipal food-waste analytics
-- **PDF impact certificate** (no tax language)
-
----
-
-## 🏷️ Trade-offs & Stubs
-
-| Feature | Status | Note |
-|---------|--------|------|
-| Live map (Leaflet) | ✅ Working | Sample pins; real coords after org signup |
-| WhatsApp notification | 🟡 Simulated | Modal preview only, no real API |
-| Photo upload | 🟡 Placeholder | UI present, no storage backend |
-| Volunteer role | 🟡 Partial | No dedicated volunteer dashboard |
-| Multilingual | 🟡 Stub | English only; i18n structure in place |
-| PWA install | 🟡 Partial | Vite PWA plugin not yet configured |
-| PDF export | ❌ Not built | Listed in future scope |
-| Real-time push | ❌ Not built | Polling at 3–5 s intervals |
-| PostgreSQL | 🟡 Optional | SQLite default; switch via DATABASE_URL in .env |
+- [Judge guide and demo walkthrough](JUDGE_GUIDE.md)
+- [User guide](docs/USER_GUIDE.md)
+- [Architecture notes](docs/ARCHITECTURE.md)
+- [API reference](docs/API.md)
+- [Contribution and allocation planning](docs/CONTRIBUTION_AND_PLANNER.md)
