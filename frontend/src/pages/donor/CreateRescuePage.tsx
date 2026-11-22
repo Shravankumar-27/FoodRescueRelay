@@ -2,7 +2,8 @@ import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, ThumbsUp, AlertTriangle, Minus } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, ThumbsUp, AlertTriangle, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
+import HandlingIcon from "../../components/ui/HandlingIcon";
 import AppShell from "../../components/layout/AppShell";
 import SafetyNotice from "../../components/rescue/SafetyNotice";
 import Button from "../../components/ui/Button";
@@ -40,28 +41,28 @@ const REPEAT_KEY = "rr.repeat";
 
 // Food type quick-chips (Hyderabad-focused catering menu)
 const FOOD_CHIPS = [
-  { label: "🍚 Veg Biryani", name: "Veg Biryani", dietary: "VEG" },
-  { label: "🍗 Chicken Biryani", name: "Chicken Biryani", dietary: "NON_VEG" },
-  { label: "🍛 Dal Tadka", name: "Dal Tadka", dietary: "VEG" },
-  { label: "🧆 Paneer Butter Masala", name: "Paneer Butter Masala", dietary: "VEG" },
-  { label: "🫓 Chapati + Curry", name: "Chapati with Curry", dietary: "VEG" },
-  { label: "🍚 Plain Rice", name: "Plain Rice", dietary: "VEG" },
-  { label: "🥗 Mixed Veg Curry", name: "Mixed Veg Curry", dietary: "VEG" },
-  { label: "🍲 Sambar", name: "Sambar", dietary: "VEG" },
-  { label: "🫕 Haleem", name: "Haleem", dietary: "NON_VEG" },
-  { label: "🧁 Sweets / Dessert", name: "Sweets", dietary: "VEG" },
+  { icon: Soup, label: "Veg Biryani", name: "Veg Biryani", dietary: "VEG" },
+  { icon: Drumstick, label: "Chicken Biryani", name: "Chicken Biryani", dietary: "NON_VEG" },
+  { icon: Soup, label: "Dal Tadka", name: "Dal Tadka", dietary: "VEG" },
+  { icon: Utensils, label: "Paneer Butter Masala", name: "Paneer Butter Masala", dietary: "VEG" },
+  { icon: Wheat, label: "Chapati + Curry", name: "Chapati with Curry", dietary: "VEG" },
+  { icon: Soup, label: "Plain Rice", name: "Plain Rice", dietary: "VEG" },
+  { icon: Salad, label: "Mixed Veg Curry", name: "Mixed Veg Curry", dietary: "VEG" },
+  { icon: Soup, label: "Sambar", name: "Sambar", dietary: "VEG" },
+  { icon: Soup, label: "Haleem", name: "Haleem", dietary: "NON_VEG" },
+  { icon: CakeSlice, label: "Sweets / Dessert", name: "Sweets", dietary: "VEG" },
 ];
 
 const QUICK_QUANTITIES = [25, 50, 100, 200];
 
 const DIETARY_OPTIONS = DIETS.map(value => ({ value, label: foodLabel(value) }));
 
-const HOLDING_OPTIONS: { value: string; label: string; desc: string; icon: string }[] = [
-  { value: "HOT_HELD", label: "Kept hot", desc: "Above 60 °C (chafing dish / hot box)", icon: "🔥" },
-  { value: "REFRIGERATED", label: "Refrigerated", desc: "Below 5 °C since preparation", icon: "❄️" },
-  { value: "ROOM_TEMPERATURE", label: "Room temperature", desc: "Record time out of temperature control", icon: "🌡️" },
-  { value: "OTHER", label: "Other", desc: "Describe in notes below", icon: "📦" },
-  { value: "UNKNOWN", label: "Not sure", desc: "Please add details in notes", icon: "❓" },
+const HOLDING_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: "HOT_HELD", label: "Kept hot", desc: "Above 60 °C (chafing dish / hot box)" },
+  { value: "REFRIGERATED", label: "Refrigerated", desc: "Below 5 °C since preparation" },
+  { value: "ROOM_TEMPERATURE", label: "Room temperature", desc: "Record time out of temperature control" },
+  { value: "OTHER", label: "Other", desc: "Describe in notes below" },
+  { value: "UNKNOWN", label: "Not sure", desc: "Please add details in notes" },
 ];
 
 // Time presets for pickup
@@ -209,7 +210,7 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
                       : "bg-border text-muted"
                   }`}
               >
-                {done ? "✓" : idx}
+                {done ? <Check className="h-4 w-4" aria-hidden="true"/> : idx}
               </div>
               <span className={`mt-1 text-xs font-medium ${active ? "text-primary" : done ? "text-primary" : "text-muted"}`}>
                 {s}
@@ -380,7 +381,7 @@ export default function CreateRescuePage() {
           <div className="flex items-center justify-between">
             <StepBar step={step} />
             {draftSaved && (
-              <span className="text-xs text-fresh animate-fade-in">Draft saved ✓</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-primary animate-fade-in"><Check className="h-3.5 w-3.5" aria-hidden="true"/>Draft saved</span>
             )}
           </div>
         </div>
@@ -399,7 +400,7 @@ export default function CreateRescuePage() {
                     onClick={() => addFoodChip(chip)}
                     className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:border-primary hover:bg-primaryLight transition-colors active:scale-95"
                   >
-                    {chip.label}
+                    <chip.icon aria-hidden="true" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom" strokeWidth={1.75}/>{chip.label}
                   </button>
                 ))}
               </div>
@@ -604,14 +605,14 @@ export default function CreateRescuePage() {
                     onChange={() => { setHolding(o.value); setHandErrs((e) => ({ ...e, holding: "" })); }}
                     className="sr-only"
                   />
-                  <span className="text-2xl">{o.icon}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primaryLight/50 text-primary"><HandlingIcon type={o.value} className="h-5 w-5"/></span>
                   <div>
                     <p className="font-medium text-ink">{o.label}</p>
                     <p className="text-xs text-muted">{o.desc}</p>
                   </div>
                   {holding === o.value && (
                     <div className="ml-auto h-5 w-5 rounded-full bg-primary flex items-center justify-center">
-                      <span className="text-white text-xs">✓</span>
+                      <Check className="h-3 w-3 text-white" aria-hidden="true"/>
                     </div>
                   )}
                 </label>
@@ -798,7 +799,7 @@ export default function CreateRescuePage() {
               {create.isPending ? (
                 <>Finding match…</>
               ) : (
-                <>🚀 Post &amp; Find Match</>
+                <><Send className="h-4 w-4" aria-hidden="true"/>Post &amp; find a match</>
               )}
             </Button>
           )}

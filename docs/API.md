@@ -461,6 +461,39 @@ The pickup code `4831` above is only an example; the real code is generated at c
 
 ## Rescue status values
 
-`POSTED` → `MATCHING` → `OFFERED` → `CLAIMED` → `COLLECTED` → `DELIVERED`, with side exits to `EXPIRED` (pickup window ended with no claim) and `CANCELLED` (donor cancelled before claim). See `docs/ARCHITECTURE.md` for the full state machine.
+`POSTED` → `MATCHING` → `OFFERED` → `CLAIMED` → `COLLECTED` → `DELIVERED`, with side exits to `EXPIRED` (uncollected food past pickup-by) and `CANCELLED` (donor cancelled before collection). Receiver release can return `CLAIMED` to `MATCHING` while time remains. See `docs/ARCHITECTURE.md` for the state machine.
 
 Offer status values: `PENDING`, `ACCEPTED`, `DECLINED`, `TIMED_OUT`, `CANCELLED`.
+
+## Cancellation and recognition
+
+`POST /rescues/{id}/cancel` now requires `{ "reason": "Food no longer available" }`. Only the owning donor can cancel, before collection.
+
+`POST /rescues/{id}/release` requires `{ "reason": "Transport unavailable" }`. Only the assigned receiver can release a CLAIMED pickup. Capacity is freed, the previous code is invalidated and matching resumes until the deadline. Its historical offer remains DECLINED with a claimed timestamp. Chat messages are scoped to the accepted offer so replacement receivers cannot read old handoff conversations.
+
+`GET /rescues/{id}/rating` returns the current participant's saved handoff stars or null; `POST` updates them after delivery.
+
+| Recognition endpoint | Access / response |
+|---|---|
+| `GET /rescues/{id}/recognition` | Donor/actual receiver; issued or withdrawn acknowledgement, or null. |
+| `POST /rescues/{id}/recognition` | Actual receiver after positive delivery; requires publication consent. |
+| `POST /rescues/{id}/recognition/withdraw` | Issuing receiver; disables public verification. |
+| `GET /recognition/mine` | Donor/receiver; latest 100 acknowledgements in own scope. |
+| `GET /recognition/verify/{token}` | Public allowlisted record; 404 for unknown/withdrawn/replaced tokens. |
+
+Example issue body:
+
+```json
+{"people_served":100,"food_rating":4,"message":"Thank you for supporting our kitchen.","consent_to_publish":true}
+```
+
+People served and food rating may be null. People must be a positive integer no greater than delivered meals. Ratings are 1–5 receiver opinions. Messages are limited to 280 characters. An issued record is immutable; identical retries succeed, different details require withdrawal then reissue. Reissue rotates the verification token. The public record contains organization names, delivery totals, dates and explicitly approved feedback, never addresses, contacts, user identities or pickup credentials.
+
+Impact summary adds reported people, count coverage, food feedback average/sample size, appreciation count, collected/rejected/unallocated servings, utilization and partner count. Reported recipients are not deduplicated across donations.
+# Contribution and private allocation
+
+- `GET /api/v1/contribution`: donor/receiver organization-scoped lifetime coins, medals, next milestone, weekly streak, impact summary and latest 100 coin activity rows. No client-supplied balance and no coin mutation endpoint.
+- `GET /api/v1/receiver/planner`: receiver's latest 100 COLLECTED/DELIVERED batches.
+- `GET /api/v1/receiver/planner/{rescue_id}`: private group draft, current revision, actual serving ceiling, food/handling data and `needs_revision`.
+- `PUT /api/v1/receiver/planner/{rescue_id}`: `{revision, handling_reviewed: true, groups: [{name, people, servings, dietary_notes}]}`. Maximum 20 groups. Whole positive people and nonnegative servings; distinct nonblank names; allocations cannot exceed actual quantity. Returns 409 for stale revisions and 422 for invalid plans. Does not create delivery impact.
+- Leaderboard entries additionally return `kindness_coins` and `contribution_medal`, separately from trust badges.

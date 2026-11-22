@@ -44,6 +44,7 @@ def get_leaderboard(
     user: User = Depends(require_roles(UserRole.DONOR, UserRole.RECEIVER, UserRole.ADMIN)),
 ) -> dict[str, Any]:
     from app.services.trust_service import trust_details
+    from app.services.rewards_service import COINS_PER_MEAL, TIERS
     result = {"donors": [], "receivers": []}
     for org in db.scalars(select(Organization).where(Organization.organization_type != "ADMIN", Organization.verification_status == "VERIFIED")).all():
         donor = org.organization_type == "CATERER"
@@ -51,6 +52,8 @@ def get_leaderboard(
         meals = int(db.scalar(select(func.sum(ImpactRecord.delivered_servings)).where(field == org.id)) or 0)
         details = trust_details(db, org)
         result["donors" if donor else "receivers"].append({"id": str(org.id), "name": org.name, "locality": org.locality,
+            "kindness_coins": meals * COINS_PER_MEAL,
+            "contribution_medal": max((tier for tier in TIERS if meals * COINS_PER_MEAL >= tier[0]), key=lambda tier: tier[0])[1],
             "meals": meals, "rescues": details["completed_rescues"], "reliability": org.reliability,
             "badge": details["rank_badge"], **details})
     for entries in result.values():

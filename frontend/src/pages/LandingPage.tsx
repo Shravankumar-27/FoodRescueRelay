@@ -76,7 +76,7 @@ export default function LandingPage() {
           </Link>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-successLight px-2.5 py-0.5 text-xs font-semibold text-success">
-              🏙️ Hyderabad Demo
+              <MapPin className="mr-1 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Hyderabad Demo
             </span>
             <Link
               to="/login"

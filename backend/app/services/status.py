@@ -18,7 +18,7 @@ ALLOWED: dict[RescueStatus, frozenset[RescueStatus]] = {
     S.POSTED: frozenset({S.MATCHING, S.CANCELLED, S.EXPIRED}),
     S.MATCHING: frozenset({S.OFFERED, S.EXPIRED, S.CANCELLED}),
     S.OFFERED: frozenset({S.CLAIMED, S.MATCHING, S.EXPIRED, S.CANCELLED}),
-    S.CLAIMED: frozenset({S.COLLECTED, S.CANCELLED, S.EXPIRED}),
+    S.CLAIMED: frozenset({S.COLLECTED, S.MATCHING, S.CANCELLED, S.EXPIRED}),
     S.COLLECTED: frozenset({S.DELIVERED}),
     S.DELIVERED: frozenset(),
     S.EXPIRED: frozenset(),

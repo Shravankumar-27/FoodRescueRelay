@@ -1,9 +1,11 @@
+import ContributionBanner from "../../components/impact/ContributionBanner";
+import HandlingIcon from "../../components/ui/HandlingIcon";
 import Metric from "../../components/ui/Metric";
 import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Map, List, Clock, MapPin, Utensils, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Map, List, Clock, MapPin, Utensils, AlertCircle, CheckCircle2, Check, PauseCircle, Truck } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
@@ -23,17 +25,17 @@ const RescueMap = lazy(() => import("../../components/map/RescueMap"));
 const OFFER_POLL_MS = 3000;
 
 const HANDLING_LABELS: Record<string, string> = {
-  HOT_HELD: "🔥 Kept hot",
-  REFRIGERATED: "❄️ Refrigerated",
+  HOT_HELD: "Kept hot",
+  REFRIGERATED: "Refrigerated",
   ROOM_TEMPERATURE: "Room temperature — confirm handling time with donor",
-  OTHER: "📦 Other",
-  UNKNOWN: "❓ Unknown",
+  OTHER: "Other",
+  UNKNOWN: "Unknown",
   // Legacy labels
-  AMBIENT: "🌡️ Ambient",
-  CHILLED: "❄️ Chilled",
-  FROZEN: "🧊 Frozen",
-  HOT: "🔥 Hot",
-  PREPARED: "🍱 Prepared meals",
+  AMBIENT: "Ambient",
+  CHILLED: "Chilled",
+  FROZEN: "Frozen",
+  HOT: "Hot",
+  PREPARED: "Prepared meals",
 };
 
 const REMOVING_CODES = ["OFFER_NOT_PENDING", "OFFER_EXPIRED"];
@@ -155,7 +157,7 @@ function OfferCard({
 
         <Link to={`/messages?partner=${offer.donor_id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">Ask the donor about this food</Link>
         {/* Handling */}
-        <p className="text-sm text-muted">{handlingLabel(offer.handling_type)}</p>
+        <p className="flex items-center gap-2 text-sm text-muted"><HandlingIcon type={offer.handling_type}/>{handlingLabel(offer.handling_type)}</p>
 
         {/* Allergens */}
         {offer.food_items.some((i) => i.allergen_info_unknown) ? (
@@ -194,7 +196,7 @@ function OfferCard({
                 <MatchScoreBar label="Current need" score={offer.factors?.need ?? 0} />
                 <MatchScoreBar label="Time window" score={offer.factors?.urgency ?? 0} />
                 {offer.why.map((w) => (
-                  <p key={w} className="text-xs text-muted">✓ {w}</p>
+                  <p key={w} className="flex items-start gap-1.5 text-xs text-muted"><Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true"/>{w}</p>
                 ))}
               </div>
             )}
@@ -219,7 +221,7 @@ function OfferCard({
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button variant="primary" onClick={onClaim} disabled={busy || remaining === 0} className="min-h-[44px] flex-1">
-            ✓ Accept rescue
+            <Check className="h-4 w-4" aria-hidden="true"/>Accept rescue
           </Button>
           <Button variant="secondary" onClick={onDecline} disabled={busy} className="min-h-[44px]">
             Can&apos;t take this
@@ -341,6 +343,7 @@ export default function ReceiverHomePage() {
   return (
     <AppShell title="Available rescues" nav="receiver">
       <div className="flex flex-col gap-4">
+        <ContributionBanner/><Link to="/receiver/planner" className="inline-flex min-h-11 items-center text-sm font-bold text-primary">Plan portions for your community →</Link>
         <section className="harvest-hero"><p className="eyebrow text-white/70">Community receiver · Hyderabad pilot</p><h2 className="mt-2 text-3xl font-extrabold">Good food is closer<br/>than you think.</h2><p className="mt-3 text-sm text-white/80">Find food that fits your community. Confirm the details, collect on time, and record the meals delivered.</p></section>
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Compatible listings" value={offersQuery.isPending ? "—" : offers.length} note="Based on your capacity & diet"/><Metric label="Active pickups" value={activePickups.length} note="Waiting for your next step"/><Metric label="Meals this month" value={impact.data?.meals_rescued_month ?? "—"} note="Confirmed deliveries"/><Metric label="Meals received" value={impact.data?.total_meals_rescued ?? "—"} note="All-time contribution"/></section>
         {activePickups.length > 0 && <Card><h3 className="mb-2 font-bold">Continue your pickups</h3>{activePickups.map(r => <Link key={r.rescue_id} to={`/receiver/pickup/${r.rescue_id}`} className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-sm"><strong>{r.rescue_display_id}</strong><span className="font-semibold text-primary">{r.status === "CLAIMED" ? "Confirm collection" : "Record delivery"}</span></Link>)}</Card>}
@@ -360,12 +363,13 @@ export default function ReceiverHomePage() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-ink">
-                    {capacity.available ? "✅ You're available" : "⏸ Paused — not receiving offers"}
+                  <p className="flex items-center gap-2 font-semibold text-ink">
+                    {capacity.available ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-hidden="true"/> : <PauseCircle className="h-4 w-4 shrink-0 text-muted" aria-hidden="true"/>}
+                    {capacity.available ? "Available for pickups" : "Paused — not receiving offers"}
                   </p>
                   <p className="text-sm text-muted">
                     Up to {capacity.max_servings} servings, {capacity.available_servings} free now
-                    {capacity.transport_available ? " · 🚗 Transport available" : ""}
+                    {capacity.transport_available && <span className="ml-2 inline-flex items-center gap-1"><Truck className="h-3.5 w-3.5" aria-hidden="true"/>Transport available</span>}
                   </p>
                 </div>
                 <button

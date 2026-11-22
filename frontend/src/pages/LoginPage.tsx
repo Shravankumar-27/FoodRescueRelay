@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Utensils, LogIn, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Utensils, LogIn, Eye, EyeOff, ArrowLeft, ShieldCheck } from "lucide-react";
 import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../features/auth/AuthContext";
@@ -184,7 +184,7 @@ export default function LoginPage() {
         </section>
 
         <p className="text-center text-xs text-muted">
-          🔒 Sample data only. No real personal information.
+          <ShieldCheck className="mr-1.5 inline-block h-3.5 w-3.5 align-text-bottom" aria-hidden="true"/>Sample data only. No real personal information.
         </p>
       </div>
     </div>

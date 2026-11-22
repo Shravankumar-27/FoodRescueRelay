@@ -18,11 +18,13 @@ def trust_details(db, org):
         stmt = stmt.join(MatchOffer, MatchOffer.rescue_id == Rescue.id).where(MatchOffer.receiver_organization_id == org.id, MatchOffer.status == "ACCEPTED")
     rescues = db.scalars(stmt).all()
     completed = sum(r.status == "DELIVERED" for r in rescues)
+    released = 0 if org.organization_type == "CATERER" else (db.scalar(select(func.count(MatchOffer.id)).where(MatchOffer.receiver_organization_id == org.id, MatchOffer.status == "DECLINED", MatchOffer.claimed_at.is_not(None))) or 0)
     ratings = db.scalars(select(PartnerRating.stars).where(PartnerRating.target_org_id == org.id)).all()
-    completion = completed / len(rescues) if rescues else None
+    outcomes = len(rescues) + released
+    completion = completed / outcomes if outcomes else None
     average = sum(ratings) / len(ratings) if ratings else None
     score = round((completion if completion is not None else .5) * .4 + org.reliability * .3 + (average / 5 if average else .5) * .3, 3)
-    return {"trust_score": score, "rank_badge": _badge(score) if rescues else "NEW", "completion_rate": completion,
+    return {"trust_score": score, "rank_badge": _badge(score) if outcomes else "NEW", "completion_rate": completion,
         "rating": round(average, 1) if average else None, "rating_count": len(ratings), "completed_rescues": completed}
 
 

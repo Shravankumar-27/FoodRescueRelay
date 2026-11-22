@@ -52,9 +52,9 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
   const messages = chatQuery.data?.messages ?? [];
   const suggested = chatQuery.data?.suggested ?? [
     "On our way! ETA 10m",
-    "Food is packed and hot 🔥",
+    "Food is packed and hot",
     "Ready for pickup",
-    "Thank you! 🙏",
+    "Thank you!",
   ];
 
   function handleSubmit(e: FormEvent) {

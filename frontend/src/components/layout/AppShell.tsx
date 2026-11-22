@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../../lib/api";
 import type { InboxItem } from "../../pages/MessagesPage";
+import type { Contribution } from "../../types/contribution";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
@@ -19,6 +20,7 @@ import {
   Heart,
   Trophy,
   Sparkles,
+  Coins,
 } from "lucide-react";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -37,14 +39,14 @@ const NAV_ITEMS: Record<NavKey, NavItem[]> = {
     { to: "/donor/rescues", label: "Rescues", icon: <History className="h-5 w-5" /> },
     { to: "/donor/impact", label: "Impact", icon: <BarChart3 className="h-5 w-5" /> },
     { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
-    { to: "/pricing", label: "Plans & CSR", icon: <Sparkles className="h-5 w-5" /> },
+    { to: "/contribution", label: "Kindness", icon: <Sparkles className="h-5 w-5" /> },
   ],
   receiver: [
     { to: "/receiver", label: "Available", icon: <Utensils className="h-5 w-5" />, end: true },
     { to: "/receiver/capacity", label: "Settings", icon: <Settings className="h-5 w-5" /> },
     { to: "/receiver/impact", label: "Impact", icon: <BarChart3 className="h-5 w-5" /> },
     { to: "/receiver/history", label: "History", icon: <History className="h-5 w-5" /> },
-    { to: "/leaderboard", label: "Rankings", icon: <Trophy className="h-5 w-5" /> },
+    { to: "/contribution", label: "Kindness", icon: <Sparkles className="h-5 w-5" /> },
   ],
   admin: [
     { to: "/admin", label: "Overview", icon: <BarChart3 className="h-5 w-5" />, end: true },
@@ -73,6 +75,7 @@ export default function AppShell({
 }) {
   const { user, logout, token } = useAuth();
   const navigate = useNavigate();
+  const contribution = useQuery({queryKey:["contribution",user?.id],queryFn:()=>apiRequest<Contribution>("/contribution",{token}),enabled:!!token&&user?.role!=="ADMIN",refetchInterval:15000});
   const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => apiRequest<InboxItem[]>("/partners/inbox", { token }), enabled: !!token && user?.role !== "ADMIN", refetchInterval: 10000 });
   const unread = (inbox.data ?? []).reduce((sum, item) => sum + item.unread, 0);
   const [online, setOnline] = useState<boolean>(() => navigator.onLine);
@@ -208,6 +211,8 @@ export default function AppShell({
             )}
 
             <span className="hidden text-sm text-muted sm:block">{user?.name ?? ""}</span>
+
+            {contribution.data&&<Link to="/contribution" aria-label={`${contribution.data.coins} kindness coins, view medals`} className="hidden min-h-11 items-center gap-1 rounded-full bg-amber-50 px-3 text-xs font-bold text-amber-800 sm:inline-flex"><Coins size={15}/>{contribution.data.coins.toLocaleString("en-IN")}</Link>}
 
             {user?.role !== "ADMIN" && <Link to="/messages" aria-label={`Messages${unread ? `, ${unread} unread` : ""}`} className="relative flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:bg-primaryLight"><MessageCircle size={20}/>{unread > 0 && <span className="absolute right-0 top-0 rounded-full bg-urgent px-1.5 text-xs text-white">{unread}</span>}</Link>}
             <button

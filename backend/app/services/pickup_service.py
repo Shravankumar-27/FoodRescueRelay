@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,9 @@ def collect_rescue(
     On a wrong code the failed attempt is committed before AppError is raised.
     """
     _require_accepted_receiver(db, rescue, receiver_user)
+    db.execute(update(Rescue).where(Rescue.id == rescue.id).values(updated_at=Rescue.updated_at))
+    db.refresh(rescue)
+    _require_accepted_receiver(db, rescue, receiver_user)
     if rescue.status == RescueStatus.CLAIMED.value and ensure_utc(rescue.pickup_by) <= ensure_utc(now):
         transition_rescue(db, rescue, RescueStatus.EXPIRED, None, reason="pickup_window_ended")
         db.commit()
@@ -94,6 +97,8 @@ def deliver_rescue(
     Idempotent: a rescue that is already DELIVERED returns its existing impact
     record without changing anything.
     """
+    db.execute(update(Rescue).where(Rescue.id == rescue.id).values(updated_at=Rescue.updated_at))
+    db.refresh(rescue)
     _require_accepted_receiver(db, rescue, receiver_user)
     if rescue.status == RescueStatus.DELIVERED.value:
         existing = _impact_for(db, rescue)

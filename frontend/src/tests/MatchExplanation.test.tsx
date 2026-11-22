@@ -38,8 +38,8 @@ describe("MatchExplanation", () => {
 
   it("renders each feasible reason line", () => {
     render(<MatchExplanation candidates={candidates} />);
-    expect(screen.getByText("✓ Within 5 km")).toBeInTheDocument();
-    expect(screen.getByText("✓ Accepts chilled food")).toBeInTheDocument();
+    expect(screen.getByText("Within 5 km")).toBeInTheDocument();
+    expect(screen.getByText("Accepts chilled food")).toBeInTheDocument();
   });
 
   it("renders infeasible candidates with their rejection reasons", () => {

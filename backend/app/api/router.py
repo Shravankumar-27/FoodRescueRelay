@@ -27,3 +27,7 @@ api_router.include_router(routes_chat.router)
 
 from app.api import routes_partners
 api_router.include_router(routes_partners.router)
+from app.api import routes_recognition
+api_router.include_router(routes_recognition.router)
+from app.api import routes_contribution
+api_router.include_router(routes_contribution.router)

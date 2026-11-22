@@ -1,5 +1,24 @@
 # RescueRelay architecture
 
+## Receiver-issued recognition
+
+```mermaid
+flowchart LR
+    Delivery[Receiver confirms delivered servings] --> Impact[Immutable delivery impact]
+    Impact --> Issue[Receiver adds optional people count and food feedback]
+    Issue --> Consent[Explicit publication consent]
+    Consent --> Record[DonationRecognition and random public token]
+    Record --> Studio[Donor appreciation studio]
+    Studio --> PNG[PNG / print / caption]
+    Record --> Verify[Public allowlisted verification page]
+    Record --> Withdraw[Receiver withdraws acknowledgement]
+    Withdraw --> Invalid[Old verification link returns unavailable]
+```
+
+Recognition is separate from impact: withdrawing a poster does not undo delivered meals. Public records expose only approved organization names, totals, dates and feedback. Issuer user IDs remain private. Issuance/revocation is serialized per rescue, duplicate issuance is idempotent, and corrected reissuance rotates the token. People counts are reported per delivery and never claimed to be unique across deliveries.
+
+Receiver release adds a `CLAIMED → MATCHING` recovery transition before collection. It releases capacity, invalidates the old pickup code and records the actor/reason. Accepted-offer identifiers scope handoff chat, preventing a replacement receiver from reading the previous private conversation. Donor cancellation is available before collection and requires a reason.
+
 This document gives a brief overview of the components and the rescue lifecycle. For setup, see [HOW_TO_RUN.md](../HOW_TO_RUN.md). For the live API, see Swagger at `http://localhost:8000/docs` when the server is running.
 
 ## Components

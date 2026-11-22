@@ -136,13 +136,11 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
     # Step 4: create the handoff. Only the bcrypt hash and the encrypted donor copy
     # are stored; the plaintext code is never persisted.
     code = f"{secrets.randbelow(10000):04d}"
-    handoff = Handoff(
-        id=new_uuid(),
-        rescue_id=rescue_id,
-        pickup_code_expires_at=ensure_utc(rescue.pickup_by) + PICKUP_CODE_GRACE,
-        pickup_code_attempts=0,
-        created_at=now,
-    )
+    handoff = db.scalar(select(Handoff).where(Handoff.rescue_id == rescue_id))
+    if handoff is None:
+        handoff = Handoff(id=new_uuid(), rescue_id=rescue_id, created_at=now)
+    handoff.pickup_code_expires_at = ensure_utc(rescue.pickup_by) + PICKUP_CODE_GRACE
+    handoff.pickup_code_attempts = 0
     store_pickup_code(handoff, code)
     db.add(handoff)
 
@@ -225,7 +223,7 @@ def list_history(
         .outerjoin(Handoff, Handoff.rescue_id == Rescue.id)
         .where(
             MatchOffer.receiver_organization_id == user.organization_id,
-            MatchOffer.status == OfferStatus.ACCEPTED.value,
+            (MatchOffer.status == OfferStatus.ACCEPTED.value) | ((MatchOffer.status == "DECLINED") & MatchOffer.claimed_at.is_not(None)),
         )
         .order_by(MatchOffer.claimed_at.desc())
     ).all()
@@ -234,8 +232,8 @@ def list_history(
             "offer_id": str(offer.id),
             "rescue_id": str(rescue.id),
             "rescue_display_id": rescue.display_id,
-            "status": rescue.status,
-            "delivered_servings": handoff.delivered_servings if handoff is not None else None,
+            "status": "CANCELLED" if offer.status == "DECLINED" else rescue.status,
+            "delivered_servings": handoff.delivered_servings if handoff is not None and offer.status == "ACCEPTED" else None,
             "pickup_by": iso_utc(rescue.pickup_by),
         }
         for offer, rescue, handoff in rows

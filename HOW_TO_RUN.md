@@ -1,5 +1,17 @@
 # How to run RescueRelay
 
+## Recognition, coins and planner update (November 2026)
+
+The donor appreciation studio and receiver acknowledgement flow use migrations `0004` (recognition) and `0005` (private allocation plans). For an existing synthetic demo, run `python -m app.seed.init_db` from `backend`; this adds the missing schema without deleting your donations. For Alembic-managed databases, run `alembic upgrade head`. Back up non-disposable databases first, then restart the API.
+
+After a delivery: receiver **History → Open rescue → Create appreciation → Issue**. Switch to the donor and open **Kindness → Your storefront story**, or **Impact → Appreciation studio**. Download the poster PNG, choose a theme, print/save PDF, or copy a promotional caption. The receiver can withdraw or correct an acknowledgement from the delivered pickup. See [the checklist audit](docs/CHECKLIST_AUDIT.md) for implemented and deferred capabilities.
+
+Both roles now have **Kindness**: 10 coins per confirmed delivered meal, milestone medals and a lifetime poster with no printed links. Receivers also have **Plan every portion** to save private group allocations and export packing lists. See [contribution and planner rules](docs/CONTRIBUTION_AND_PLANNER.md).
+
+Keep `python -m app.workers.dispatch_worker` running alongside the API for unattended timeout rotation. On PowerShell, use `npm.cmd` when script execution policy blocks `npm.ps1`.
+
+Public verification links use the current browser origin. Localhost links work only on the machine running this demo; share externally only after a deployment provides a reachable frontend and API. No production deployment or payment setup is implied by generating a poster.
+
 These steps are for a **Windows** host. PowerShell commands come first, then CMD, then Linux/macOS. Paths are relative to the repository root.
 
 ## Prerequisites

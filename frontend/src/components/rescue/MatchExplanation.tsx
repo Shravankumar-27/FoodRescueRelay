@@ -1,4 +1,5 @@
 import Card from "../ui/Card";
+import { Check } from "lucide-react";
 import type { MatchCandidate } from "../../types/api";
 
 export default function MatchExplanation({ candidates }: { candidates: MatchCandidate[] }) {
@@ -17,7 +18,7 @@ export default function MatchExplanation({ candidates }: { candidates: MatchCand
           </p>
           <ul className="mt-2 flex flex-col gap-1 text-sm text-ink">
             {c.why.map((reason, i) => (
-              <li key={i}>{`✓ ${reason}`}</li>
+              <li key={i} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true"/><span>{reason}</span></li>
             ))}
           </ul>
         </Card>

@@ -12,6 +12,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid)
     rescue_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("rescues.id", ondelete="CASCADE"), index=True)
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     sender_org_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("organizations.id", ondelete="CASCADE"))
     sender_name: Mapped[str] = mapped_column(String(200))
     sender_role: Mapped[str] = mapped_column(String(16))

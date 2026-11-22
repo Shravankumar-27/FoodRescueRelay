@@ -41,3 +41,5 @@ __all__ = [
 ]
 
 from app.models.community import PartnerMessage, PartnerRating
+from app.models.recognition import DonationRecognition
+from app.models.allocation import FoodAllocationPlan

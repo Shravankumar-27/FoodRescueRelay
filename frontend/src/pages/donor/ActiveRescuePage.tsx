@@ -1,3 +1,4 @@
+import RecognitionCard from "../../components/rescue/RecognitionCard";
 import PartnerRating from "../../components/rescue/PartnerRating";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -22,18 +23,18 @@ import { pollInterval } from "../../hooks/usePolling";
 import type { MatchCandidate, RescueDetail } from "../../types/api";
 
 const MATCHABLE = ["POSTED", "MATCHING", "OFFERED"];
-const CANCELLABLE = ["POSTED", "MATCHING", "OFFERED"];
+const CANCELLABLE = ["POSTED", "MATCHING", "OFFERED", "CLAIMED"];
 const RETRY_AFTER_MS = 2 * 60 * 1000;
 
 const DIETARY_LABELS: Record<string, string> = {
-  VEG: "🥦 Vegetarian",
-  NON_VEG: "🍗 Non-vegetarian",
-  VEGAN: "🌱 Vegan",
-  JAIN: "🙏 Jain",
-  HALAL: "☪️ Halal",
-  GLUTEN_FREE: "🌾 Gluten-free",
-  DIABETIC_FRIENDLY: "💙 Diabetic-friendly",
-  RAW_VEGAN: "🥬 Raw Vegan",
+  VEG: "Vegetarian",
+  NON_VEG: "Non-vegetarian",
+  VEGAN: "Vegan",
+  JAIN: "Jain",
+  HALAL: "Halal",
+  GLUTEN_FREE: "Gluten-free",
+  DIABETIC_FRIENDLY: "Diabetic-friendly",
+  RAW_VEGAN: "Raw Vegan",
   OTHER: "Other",
   UNKNOWN: "Unknown",
 };
@@ -70,6 +71,8 @@ export default function ActiveRescuePage() {
   const { token } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [cancelReason, setCancelReason] = useState("");
+  const [showCancel, setShowCancel] = useState(false);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -108,19 +111,17 @@ export default function ActiveRescuePage() {
   });
 
   const cancel = useMutation({
-    mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/cancel`, { method: "POST", token }),
+    mutationFn: () => apiRequest<RescueDetail>(`/rescues/${id}/cancel`, { method: "POST", token, body: {reason:cancelReason} }),
     onMutate: () => setActionError(null),
     onSuccess: (data) => {
       onRescueUpdated(data);
-      toast({ variant: "info", title: "Rescue cancelled", message: "No receivers will be notified." });
+      toast({ variant: "info", title: "Rescue cancelled", message: "The listing is closed and reserved capacity is released." });
     },
     onError: (e) => setActionError(errorText(e)),
   });
 
   function onCancel() {
-    if (window.confirm("Cancel this rescue? Receivers will no longer be able to claim it.")) {
-      cancel.mutate();
-    }
+    setShowCancel(true);
   }
 
   async function copyCode(code: string) {
@@ -337,9 +338,9 @@ export default function ActiveRescuePage() {
             {/* Impact */}
             {d.status === "DELIVERED" && (
               <section aria-labelledby="impact-heading" className="flex flex-col gap-4">
-                <PartnerRating rescueId={id}/>
-                <h3 id="impact-heading" className="text-lg font-semibold text-ink">
-                  🎉 Impact
+                <RecognitionCard rescueId={id} delivered={d.impact?.delivered_servings ?? 0}/><PartnerRating rescueId={id}/>
+                <h3 id="impact-heading" className="flex items-center gap-2 text-lg font-semibold text-ink">
+                  <Leaf className="h-4 w-4" aria-hidden="true"/> Impact
                 </h3>
                 <div className="rounded-2xl bg-fresh/10 border border-fresh/20 p-4">
                   <ImpactMetric label="Meals rescued" value={`${d.impact?.delivered_servings ?? 0} meals`} />
@@ -373,6 +374,7 @@ export default function ActiveRescuePage() {
             {/* Cancel */}
             {cancellable && (
               <div className="flex flex-col gap-2">
+                {showCancel && <form onSubmit={e => {e.preventDefault();cancel.mutate();}} className="rounded-xl border border-border bg-white p-4"><label className="block text-sm font-semibold">Reason for cancellation<textarea value={cancelReason} onChange={e=>setCancelReason(e.target.value)} minLength={3} maxLength={300} required className="mt-2 w-full rounded-xl border border-border p-3"/></label><p className="my-3 text-sm text-muted">This closes the listing. If already claimed, coordinate with your receiver before cancelling.</p><div className="flex gap-2"><Button type="submit" variant="danger" disabled={cancel.isPending || cancelReason.trim().length<3}>Confirm cancellation</Button><Button type="button" variant="ghost" onClick={()=>setShowCancel(false)}>Keep donation</Button></div></form>}
                 <Button
                   variant="secondary"
                   className="min-h-[44px] self-start text-muted hover:text-urgent"

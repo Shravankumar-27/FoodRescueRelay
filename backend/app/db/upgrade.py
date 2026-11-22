@@ -1,5 +1,5 @@
 """Idempotent upgrade for existing demo databases and Alembic deployments."""
-from sqlalchemy import inspect, Column, Float, String, JSON, text
+from sqlalchemy import inspect, Column, Float, String, JSON, text, Uuid
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
@@ -28,3 +28,5 @@ def upgrade_schema(connection):
             with ops.batch_alter_table("food_items") as batch:
                 batch.drop_constraint(constraint["name"], type_="check")
                 batch.create_check_constraint(constraint["name"], f"dietary_type IN ({values})")
+    if inspect(connection).has_table("chat_messages") and "offer_id" not in {c["name"] for c in inspect(connection).get_columns("chat_messages")}:
+        ops.add_column("chat_messages", Column("offer_id", Uuid, nullable=True))

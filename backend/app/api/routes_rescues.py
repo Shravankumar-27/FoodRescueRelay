@@ -6,7 +6,8 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy import select
+from sqlalchemy import select, update
+from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
@@ -33,7 +34,18 @@ from app.services.status import transition_rescue
 router = APIRouter(prefix="/rescues", tags=["rescues"])
 
 MINE_LIMIT = 50
-CANCELLABLE_STATUSES = (RescueStatus.POSTED, RescueStatus.MATCHING, RescueStatus.OFFERED)
+CANCELLABLE_STATUSES = (RescueStatus.POSTED, RescueStatus.MATCHING, RescueStatus.OFFERED, RescueStatus.CLAIMED)
+
+
+class CancellationReason(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+
+    @field_validator("reason")
+    @classmethod
+    def meaningful_reason(cls, value):
+        if len(value.strip()) < 3:
+            raise ValueError("Explain why this pickup cannot continue.")
+        return value.strip()
 
 
 def _request_id(request: Request) -> str:
@@ -197,21 +209,53 @@ def list_events(
 @router.post("/{rescue_id}/cancel")
 def cancel_rescue(
     rescue_id: uuid.UUID,
+    body: CancellationReason,
     request: Request,
     db: DbSession,
     donor: User = Depends(require_roles(UserRole.DONOR)),
 ) -> dict[str, Any]:
+    db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
     rescue = _load_rescue(db, rescue_id)
     if not is_donor_owner(donor, rescue):
         raise AppError("RESCUE_NOT_FOUND", "Rescue was not found.", 404)
     if rescue.status not in [s.value for s in CANCELLABLE_STATUSES]:
         raise AppError(
             "CANCEL_NOT_ALLOWED",
-            "This rescue has already been claimed and can no longer be cancelled.",
+            "Collected or completed food cannot be cancelled. Coordinate delivery with the receiver.",
             409,
         )
     now = utcnow()
     cancel_pending_offers(db, rescue.id)
-    transition_rescue(db, rescue, RescueStatus.CANCELLED, donor.id, reason="cancelled_by_donor")
+    transition_rescue(db, rescue, RescueStatus.CANCELLED, donor.id, reason=f"cancelled_by_donor: {body.reason}")
     db.commit()
     return ok(rescue_detail(db, rescue, donor, now), _request_id(request))
+
+
+@router.post("/{rescue_id}/release")
+def release_pickup(rescue_id: uuid.UUID, body: CancellationReason, request: Request, db: DbSession, user: User = Depends(require_roles(UserRole.RECEIVER))):
+    from app.models.offer import MatchOffer
+    from app.models.receiver_capacity import ReceiverCapacity
+    from app.models.handoff import Handoff
+    from app.services.rescue_helpers import ensure_utc
+    db.execute(update(ReceiverCapacity).where(ReceiverCapacity.organization_id == user.organization_id).values(updated_at=utcnow()))
+    db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
+    rescue = _load_rescue(db, rescue_id)
+    offer = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.receiver_organization_id == user.organization_id, MatchOffer.status == "ACCEPTED"))
+    if not offer:
+        raise AppError("RESCUE_NOT_FOUND", "This pickup is not assigned to your organization.", 404)
+    if rescue.status != "CLAIMED":
+        raise AppError("RELEASE_NOT_ALLOWED", "Only a pickup that has not been collected can be released.", 409)
+    offer.status = "DECLINED"
+    handoff = db.scalar(select(Handoff).where(Handoff.rescue_id == rescue_id))
+    if handoff:
+        handoff.pickup_code_hash = None
+        handoff.pickup_code_display = None
+        handoff.pickup_code_expires_at = utcnow()
+    now = utcnow()
+    state = RescueStatus.EXPIRED if ensure_utc(rescue.pickup_by) <= now else RescueStatus.MATCHING
+    transition_rescue(db, rescue, state, user.id, reason=f"receiver_released: {body.reason}")
+    db.flush()
+    if state == RescueStatus.MATCHING:
+        start_dispatch(db, rescue, now)
+    db.commit()
+    return ok({"status": rescue.status, "message": "Your pickup is released. Matching continues while time remains."}, _request_id(request))

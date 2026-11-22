@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import AppShell from "../../components/layout/AppShell";
@@ -12,6 +13,7 @@ import type { ReceiverHistoryItem } from "../../types/api";
 
 export default function ReceiverHistoryPage() {
   const { token } = useAuth();
+  const [status,setStatus] = useState("");
 
   const historyQuery = useQuery({
     queryKey: ["receiver", "history"],
@@ -38,17 +40,18 @@ export default function ReceiverHistoryPage() {
           Back to available rescues
         </Link>
 
+        <label className="text-sm font-semibold">Filter pickup history<select value={status} onChange={e=>setStatus(e.target.value)} className="ml-3"><option value="">All pickups</option>{["CLAIMED","COLLECTED","DELIVERED","CANCELLED","EXPIRED"].map(s=><option value={s} key={s}>{s.toLowerCase()}</option>)}</select></label>
         {historyQuery.isLoading ? (
           <Skeleton className="h-48 w-full" />
         ) : otherError ? (
           <p role="alert" className="text-sm text-red-700">
             {otherError}
           </p>
-        ) : notFound || (historyQuery.data ?? []).length === 0 ? (
+        ) : notFound || (historyQuery.data ?? []).filter(r=>!status||r.status===status).length === 0 ? (
           <EmptyState title="Your completed rescues will appear here." />
         ) : (
           <ul className="flex flex-col gap-3">
-            {(historyQuery.data ?? []).map((item) => (
+            {(historyQuery.data ?? []).filter(r=>!status||r.status===status).map((item) => (
               <li key={item.offer_id}>
                 <Card>
                   <div className="flex flex-col gap-2">
@@ -60,12 +63,12 @@ export default function ReceiverHistoryPage() {
                       Delivered: {item.delivered_servings ?? "—"} servings
                     </p>
                     <p className="text-sm">Pick up by: {formatDateTime(item.pickup_by)}</p>
-                    <Link
+                    {item.status !== "CANCELLED" ? <Link
                       to={`/receiver/pickup/${item.rescue_id}`}
                       className="inline-flex min-h-11 items-center font-medium underline"
                     >
                       Open rescue {item.rescue_display_id}
-                    </Link>
+                    </Link> : <p className="text-sm text-muted">This pickup was released or cancelled. No collection is expected from your team.</p>}
                   </div>
                 </Card>
               </li>

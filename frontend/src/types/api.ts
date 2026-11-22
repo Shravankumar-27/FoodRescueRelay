@@ -195,6 +195,17 @@ export interface CapacityData {
 }
 
 export interface ImpactSummary {
+  reported_people_served: number;
+  people_counted_deliveries: number;
+  people_count_note: string;
+  food_rating: number | null;
+  food_rating_count: number;
+  recognition_count: number;
+  community_partners: number;
+  collected_servings: number;
+  rejected_servings: number;
+  unaccounted_servings: number;
+  utilization_rate: number | null;
   weekly: { week: string; meals: number; co2e_kg: number }[];
   food_kg_estimate: number;
   co2e_kg_estimate: number;
@@ -206,6 +217,8 @@ export interface ImpactSummary {
   completion_rate: number;
   avg_completion_minutes: number | null;
   recent_completed: {
+    rescue_id: string;
+    recognition_token: string | null;
     display_id: string;
     delivered_servings: number;
     delivered_at: string;
@@ -276,6 +289,8 @@ export interface ChatData {
 }
 
 export interface LeaderboardEntry {
+  kindness_coins: number;
+  contribution_medal: string;
   trust_score: number;
   rating: number | null;
   rating_count: number;

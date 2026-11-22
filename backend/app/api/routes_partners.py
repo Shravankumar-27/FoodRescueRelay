@@ -87,6 +87,7 @@ class RatingIn(BaseModel):
 
 @router.post("/rescues/{rescue_id}/rating")
 def rate(rescue_id: uuid.UUID, body: RatingIn, request: Request, db: DbSession, user: User = Depends(participant)):
+    db.execute(update(Rescue).where(Rescue.id == rescue_id).values(updated_at=Rescue.updated_at))
     rescue = db.get(Rescue, rescue_id)
     accepted = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.status == "ACCEPTED"))
     if not rescue or not accepted or user.organization_id not in (rescue.donor_organization_id, accepted.receiver_organization_id):
@@ -105,3 +106,13 @@ def rate(rescue_id: uuid.UUID, body: RatingIn, request: Request, db: DbSession, 
     compute_trust_scores(db)
     db.commit()
     return ok({"stars": rating.stars}, request.state.request_id)
+
+
+@router.get("/rescues/{rescue_id}/rating")
+def my_rating(rescue_id: uuid.UUID, request: Request, db: DbSession, user: User = Depends(participant)):
+    rescue = db.get(Rescue, rescue_id)
+    accepted = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.status == "ACCEPTED"))
+    if not rescue or not accepted or user.organization_id not in (rescue.donor_organization_id, accepted.receiver_organization_id):
+        raise AppError("RESCUE_NOT_FOUND", "Rescue not found.", 404)
+    rating = db.scalar(select(PartnerRating).where(PartnerRating.rescue_id == rescue_id, PartnerRating.author_org_id == user.organization_id))
+    return ok({"stars": rating.stars if rating else None}, request.state.request_id)

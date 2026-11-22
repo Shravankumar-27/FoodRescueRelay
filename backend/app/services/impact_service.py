@@ -21,6 +21,7 @@ from app.models.impact import ImpactRecord
 from app.models.offer import MatchOffer
 from app.models.organization import Organization
 from app.models.rescue import Rescue
+from app.models.recognition import DonationRecognition
 from app.services.rescue_helpers import ensure_utc
 
 METHODOLOGY_NOTE = "Meals rescued = receiver-confirmed delivered servings."
@@ -35,7 +36,7 @@ def _rescue_denominator(
     elif receiver_org_id is not None:
         stmt = select(func.count(func.distinct(MatchOffer.rescue_id))).where(
             MatchOffer.receiver_organization_id == receiver_org_id,
-            MatchOffer.status == OfferStatus.ACCEPTED.value,
+            MatchOffer.claimed_at.is_not(None),
         )
     else:
         stmt = select(func.count(Rescue.id))
@@ -49,6 +50,14 @@ def _delivered_rows(
     stmt = (
         select(
             ImpactRecord.delivered_servings.label("servings"),
+            ImpactRecord.donor_organization_id.label("donor_id"),
+            ImpactRecord.receiver_organization_id.label("receiver_id"),
+            Rescue.id.label("rescue_id"),
+            Handoff.collected_servings.label("collected_servings"),
+            Handoff.rejected_servings.label("rejected_servings"),
+            DonationRecognition.people_served.label("people_served"),
+            DonationRecognition.food_rating.label("food_rating"),
+            DonationRecognition.public_token.label("recognition_token"),
             ImpactRecord.created_at.label("recorded_at"),
             Handoff.delivered_at.label("delivered_at"),
             Rescue.display_id.label("display_id"),
@@ -59,6 +68,7 @@ def _delivered_rows(
         .join(Rescue, Rescue.id == ImpactRecord.rescue_id)
         .join(Handoff, Handoff.rescue_id == ImpactRecord.rescue_id)
         .join(Organization, Organization.id == ImpactRecord.receiver_organization_id)
+        .outerjoin(DonationRecognition, (DonationRecognition.rescue_id == Rescue.id) & DonationRecognition.withdrawn_at.is_(None))
     )
     if donor_org_id is not None:
         stmt = stmt.where(ImpactRecord.donor_organization_id == donor_org_id)
@@ -91,6 +101,10 @@ def impact_summary(
         minutes.append(elapsed.total_seconds() / 60)
 
     completed = len(rows)
+    ratings = [row.food_rating for row in rows if row.food_rating is not None]
+    people_rows = [row for row in rows if row.people_served is not None]
+    collected = sum(row.collected_servings or 0 for row in rows)
+    rejected = sum(row.rejected_servings or 0 for row in rows)
     weeks = []
     monday = current.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=current.weekday())
     for offset in range(7, -1, -1):
@@ -99,6 +113,17 @@ def impact_summary(
         meals = sum(row.servings for row in rows if start <= ensure_utc(row.recorded_at) < end)
         weeks.append({"week": start.strftime("%d %b"), "meals": meals, "co2e_kg": round(meals * .4 * 2.5, 1)})
     return {
+        "reported_people_served": sum(row.people_served for row in people_rows),
+        "people_counted_deliveries": len(people_rows),
+        "people_count_note": "Receiver-reported recipients per delivery, not deduplicated across donations. Meals are servings, not a count of unique people.",
+        "food_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,
+        "food_rating_count": len(ratings),
+        "recognition_count": sum(row.recognition_token is not None for row in rows),
+        "community_partners": len({row.donor_id if receiver_org_id else row.receiver_id for row in rows}),
+        "collected_servings": collected,
+        "rejected_servings": rejected,
+        "unaccounted_servings": max(0, collected - total_meals - rejected),
+        "utilization_rate": round(total_meals / collected, 3) if collected else None,
         "weekly": weeks,
         "food_kg_estimate": round(total_meals * .4, 1),
         "co2e_kg_estimate": round(total_meals * .4 * 2.5, 1),
@@ -112,6 +137,8 @@ def impact_summary(
         "recent_completed": [
             {
                 "display_id": row.display_id,
+                "rescue_id": str(row.rescue_id),
+                "recognition_token": str(row.recognition_token) if row.recognition_token else None,
                 "delivered_servings": row.servings,
                 "delivered_at": ensure_utc(row.delivered_at).isoformat(),
                 "receiver_name": row.receiver_name,

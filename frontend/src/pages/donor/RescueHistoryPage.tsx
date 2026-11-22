@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import AppShell from "../../components/layout/AppShell";
@@ -11,6 +12,9 @@ import type { RescueSummary } from "../../types/api";
 
 export default function RescueHistoryPage() {
   const { token } = useAuth();
+  const [status,setStatus] = useState("");
+  const [search,setSearch] = useState("");
+  const [month,setMonth] = useState(false);
 
   const mine = useQuery({
     queryKey: ["rescues", "mine"],
@@ -18,11 +22,13 @@ export default function RescueHistoryPage() {
     enabled: !!token,
   });
 
-  const rescues = [...(mine.data ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const rescues = [...(mine.data ?? [])].filter(r=>(!status||r.status===status)&&(!search||`${r.display_id} ${r.locality}`.toLowerCase().includes(search.toLowerCase()))&&(!month||new Date(r.created_at).getMonth()===new Date().getMonth()&&new Date(r.created_at).getFullYear()===new Date().getFullYear())).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return (
     <AppShell title="Rescue history" nav="donor">
-      <div className="mx-auto flex max-w-2xl flex-col gap-4">
+      <div className="flex flex-col gap-4">
+        <section className="harvest-hero"><p className="eyebrow text-white/70">Your contribution journal</p><h2 className="mt-2 text-3xl font-bold">Every handoff has a story.</h2><p className="mt-3 text-sm text-white/80">Review deliveries, revisit a pickup and find your receiver-issued appreciation.</p></section>
+        <div className="flex flex-wrap gap-2"><input aria-label="Search donation history" placeholder="Search rescue or locality" value={search} onChange={e=>setSearch(e.target.value)} className="min-h-12 rounded-xl border border-border px-3"/><select aria-label="Filter donation status" value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{["POSTED","MATCHING","OFFERED","CLAIMED","COLLECTED","DELIVERED","EXPIRED","CANCELLED"].map(t=><option key={t} value={t}>{t.toLowerCase()}</option>)}</select><label className="flex min-h-12 items-center gap-2 text-sm"><input type="checkbox" checked={month} onChange={e=>setMonth(e.target.checked)}/>This month</label><button className="min-h-12 px-3 text-sm text-primary underline" onClick={()=>{setStatus("");setSearch("");setMonth(false);}}>Clear filters</button></div><p className="text-xs text-muted">Filtering your latest 50 listings. Lifetime totals and all delivered records remain available in Impact.</p>
         {mine.isLoading && (
           <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading rescue history">
             <Skeleton className="h-16 w-full" />
@@ -39,7 +45,7 @@ export default function RescueHistoryPage() {
 
         {!mine.isLoading && !mine.isError && rescues.length === 0 && (
           <EmptyState
-            title="No rescues yet"
+            title={mine.data?.length ? "No donations match these filters" : "No rescues yet"}
             body="Your rescues will appear here once you post your first listing."
             action={
               <Link to="/donor/rescue/new" className="font-semibold text-emerald-700 underline">
@@ -60,7 +66,7 @@ export default function RescueHistoryPage() {
                   <div>
                     <p className="font-semibold text-gray-900">{r.display_id}</p>
                     <p className="text-sm text-gray-600">Pickup by {formatDateTime(r.pickup_by)}</p>
-                    {r.delivered_servings ? (
+                    {r.delivered_servings != null ? (
                       <p className="text-sm text-gray-800">{r.delivered_servings} meals delivered</p>
                     ) : null}
                   </div>

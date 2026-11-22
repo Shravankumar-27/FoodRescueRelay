@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, or_, func
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
 from app.core.errors import AppError
@@ -19,9 +19,9 @@ from app.models.offer import MatchOffer
 router = APIRouter(prefix="/rescues", tags=["chat"])
 
 SUGGESTED_MESSAGES_BY_STATUS: dict[str, list[str]] = {
-    "CLAIMED": ["On my way to pick up!", "ETA 10 minutes", "Food ready for pickup?", "Thank you for donating! 🙏"],
+    "CLAIMED": ["On my way to pick up!", "ETA 10 minutes", "Food ready for pickup?", "Thank you for donating!"],
     "COLLECTED": ["Food collected successfully!", "On my way to deliver", "ETA 15 minutes to delivery"],
-    "DELIVERED": ["Delivered successfully! Thank you! 🎉", "Meals reached the community 🙏", "Great partnership!"],
+    "DELIVERED": ["Delivered successfully! Thank you!", "Meals reached the community", "Great partnership!"],
     "default": ["Hello!", "Quick question about the food", "On my way", "Thank you!", "Any update?"],
 }
 
@@ -52,9 +52,13 @@ def get_chat(
     rescue = db.get(Rescue, rescue_id)
     if rescue is None or not can_chat(db, user, rescue):
         raise AppError("RESCUE_NOT_FOUND", "Rescue not found.", 404)
-    messages = db.scalars(
-        select(ChatMessage).where(ChatMessage.rescue_id == rescue_id).order_by(ChatMessage.created_at)
-    ).all()
+    accepted = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.status == "ACCEPTED"))
+    query = select(ChatMessage).where(ChatMessage.rescue_id == rescue_id)
+    if user.role != "ADMIN":
+        claims = db.scalar(select(func.count(MatchOffer.id)).where(MatchOffer.rescue_id == rescue_id, MatchOffer.claimed_at.is_not(None))) or 0
+        # Preserve legacy messages only in their original handoff; never leak them to a replacement receiver.
+        query = query.where(or_(ChatMessage.offer_id == accepted.id, ChatMessage.offer_id.is_(None)) if accepted and claims <= 1 else ChatMessage.offer_id == accepted.id if accepted else ChatMessage.id.is_(None))
+    messages = list(reversed(db.scalars(query.order_by(ChatMessage.created_at.desc()).limit(100)).all()))
     suggested = SUGGESTED_MESSAGES_BY_STATUS.get(rescue.status, SUGGESTED_MESSAGES_BY_STATUS["default"])
     if user.role == "DONOR":
         suggested = {
@@ -85,9 +89,13 @@ def send_chat(
         raise AppError("RESCUE_NOT_FOUND", "Rescue not found.", 404)
     if not body.message.strip():
         raise AppError("EMPTY_MESSAGE", "Write a message before sending.", 422)
+    accepted = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.status == "ACCEPTED"))
+    if not accepted:
+        raise AppError("NO_ACTIVE_HANDOFF", "Use partner messages until a receiver claims this rescue.", 409)
     msg = ChatMessage(
         id=new_uuid(),
         rescue_id=rescue_id,
+        offer_id=accepted.id,
         sender_org_id=user.organization_id,
         sender_name=user.name or user.organization.name,
         sender_role=str(user.role.value if hasattr(user.role, "value") else user.role),
