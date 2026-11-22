@@ -1,5 +1,5 @@
 """Idempotent upgrade for existing demo databases and Alembic deployments."""
-from sqlalchemy import inspect, Boolean, Column, Float, Integer, String, JSON, text, Uuid
+from sqlalchemy import inspect, Boolean, Column, DateTime, Float, Integer, String, JSON, text, Uuid
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
@@ -45,3 +45,26 @@ def upgrade_handoff_workflows(connection):
         for column in columns:
             if column.name not in existing:
                 ops.add_column(table, column)
+
+
+def upgrade_spoilage(connection):
+    from app.core.demo_clock import clock
+    clock.create(connection, checkfirst=True)
+    if connection.execute(clock.select().where(clock.c.id == 1)).first() is None:
+        connection.execute(clock.insert().values(id=1, minutes=0))
+    ops = Operations(MigrationContext.configure(connection))
+    for table, columns in {
+        "rescues": [
+            Column("event_share_token", String(48), nullable=True),
+            Column("consume_by", DateTime(timezone=True), nullable=True),
+            Column("escalation_stage", Integer, nullable=True),
+            Column("on_the_way_at", DateTime(timezone=True), nullable=True),
+        ],
+        "organizations": [Column("id_checked", Boolean, server_default=text("false"), nullable=False)],
+    }.items():
+        existing = {column["name"] for column in inspect(connection).get_columns(table)}
+        for column in columns:
+            if column.name not in existing:
+                ops.add_column(table, column)
+    if "ix_rescues_event_share_token" not in {index["name"] for index in inspect(connection).get_indexes("rescues")}:
+        ops.create_index("ix_rescues_event_share_token", "rescues", ["event_share_token"], unique=True)

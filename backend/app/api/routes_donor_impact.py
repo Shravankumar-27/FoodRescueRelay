@@ -82,6 +82,7 @@ def donor_report(request: Request, db: DbSession, user: User = Depends(require_r
     rows = db.execute(select(Rescue.display_id, ImpactRecord.created_at, ImpactRecord.delivered_servings).join(ImpactRecord, ImpactRecord.rescue_id == Rescue.id).where(Rescue.donor_organization_id == user.organization_id).order_by(ImpactRecord.created_at.desc())).all()
     output = io.StringIO()
     writer = csv.writer(output)
+    writer.writerow(["Synthetic demo data", "Not a food-safety certification."])
     writer.writerow(["Rescue", "Confirmed at (UTC)", "Delivered meals", "Estimated food kg (0.4 kg/meal)", "Estimated CO2e kg (2.5 kg/kg)"])
     for code, at, meals in rows:
         writer.writerow([code, at.isoformat(), meals, round(meals * .4, 1), round(meals * .4 * 2.5, 1)])

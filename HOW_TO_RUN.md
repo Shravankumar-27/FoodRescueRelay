@@ -1,5 +1,24 @@
 # How to run RescueRelay
 
+## Business pack and spoilage demo
+
+Open `/pricing` for the business pack. Apply `python -m alembic upgrade head`
+from `backend` after restoring the shared demo snapshot. Migration `0009` adds
+spoilage state, event sharing and ID check records. Existing listings retain
+their original deadlines.
+
+Run `python -m app.workers.dispatch_worker` alongside the API for automatic
+escalation when no one has a listing open. For a fast-forward demo, set
+`DEMO_MODE=true` and `DEMO_CLOCK_ENABLED=true` for both processes on an isolated
+synthetic database. The admin overview can then advance the shared clock. The
+offset is stored in the demo database.
+
+Donors can save templates from the posting form. Weekly and event-end reminders
+appear on the donor dashboard in the same browser. A delivered donation can
+generate a private-by-link event report with the receiver organisation name and
+aggregate impact. The browser's existing Print / Save as PDF flow exports that
+report and sponsor reports.
+
 ## Shared database setup
 
 Use `python -m app.db.snapshot install` from `backend` after installing dependencies,

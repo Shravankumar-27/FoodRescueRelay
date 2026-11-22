@@ -242,6 +242,7 @@ export default function AppShell({
       <footer className="border-t border-border bg-surface/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm">
           <span className="font-semibold text-ink">RescueRelay <span className="hidden font-normal text-muted sm:inline">· Good food, shared locally.</span></span>
+          <span className="text-xs text-muted">Synthetic demo data · Not a food-safety certification.</span>
           <Link className="font-semibold text-primary hover:underline" to="/community/impact">Community impact</Link>
         </div>
       </footer>

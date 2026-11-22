@@ -50,7 +50,7 @@ const ROLES = [
   },
   {
     role: "Admin / Sponsor",
-    desc: "City-wide analytics, donor reports and CSR dashboards.",
+    desc: "City-wide analytics, donor reports and neighbourhood sponsorship.",
     cta: "Open dashboard",
     color: "bg-muted hover:bg-ink",
     email: "admin@rescuerelay.demo",
@@ -131,6 +131,7 @@ export default function LandingPage() {
       </section>
 
       {/* Stats bar */}
+      <p className="bg-primaryLight px-4 py-3 text-center text-sm font-semibold text-primary">Synthetic demo data</p>
       {stats && <section className="border-b border-border bg-surface" aria-label="Community impact">
         <div className="mx-auto grid max-w-5xl grid-cols-2 divide-x divide-border md:grid-cols-4">
           {stats.map((s) => (
@@ -217,6 +218,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-border bg-surface px-4 py-6 text-center text-xs text-muted">
         RescueRelay · Hyderabad
+        <p className="mt-2">Synthetic demo data</p>
       </footer>
     </div>
   );

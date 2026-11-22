@@ -23,6 +23,7 @@ from app.schemas.rescue import RescueCreate
 from app.services.allocation_notices import latest_notices, notice_summary, puzzle_data, send_notices
 from app.services.dispatch_service import advance_expired_offers, cancel_pending_offers, offer_replacement, start_dispatch
 from app.services.matching_service import match_rescue
+from app.services.rescue_helpers import ensure_utc
 from app.services.rescue_service import (
     can_view_rescue,
     create_rescue,
@@ -104,6 +105,8 @@ def post_rescue(
     rescue, created, matching_error = create_rescue(db, donor, body)
     db.commit()
     data = rescue_detail(db, rescue, donor, utcnow())
+    if created and ensure_utc(body.pickup_by) > ensure_utc(rescue.pickup_by):
+        data["pickup_was_capped"] = True
     if matching_error:
         data["matching_error"] = True
     response.status_code = 201 if created else 200
@@ -308,7 +311,6 @@ def cancel_rescue(
 @router.post("/{rescue_id}/release")
 def release_pickup(rescue_id: uuid.UUID, body: CancellationReason, request: Request, db: DbSession, user: User = Depends(require_roles(UserRole.RECEIVER))):
     from app.models.handoff import Handoff
-    from app.services.rescue_helpers import ensure_utc
     db.execute(update(ReceiverCapacity).where(ReceiverCapacity.organization_id == user.organization_id).values(updated_at=utcnow()))
     rescue = lock_rescue(db, rescue_id)
     offer = db.scalar(select(MatchOffer).where(MatchOffer.rescue_id == rescue_id, MatchOffer.receiver_organization_id == user.organization_id, MatchOffer.status == "ACCEPTED"))

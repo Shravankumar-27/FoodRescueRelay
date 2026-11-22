@@ -54,6 +54,7 @@ def list_organizations(
             "name": org.name,
             "organization_type": org.organization_type,
             "verification_status": org.verification_status,
+            "id_checked": org.id_checked,
             "locality": org.locality,
             "reliability": org.reliability,
             "created_at": iso_utc(org.created_at),
@@ -135,6 +136,7 @@ def platform_stats(request: Request, db: DbSession) -> dict[str, Any]:
 class VerificationUpdate(BaseModel):
     status: VerificationStatus
     reason: str = Field(min_length=3, max_length=300)
+    id_checked: bool = False
 
 
 @router.post("/organizations/{org_id}/verification")
@@ -154,6 +156,7 @@ def verify_organization(org_id: uuid.UUID, body: VerificationUpdate, request: Re
     from app.models.community import OrganizationAudit
     db.add(OrganizationAudit(organization_id=org.id, previous_status=org.verification_status, new_status=body.status.value, reason=body.reason.strip()))
     org.verification_status = body.status.value
+    org.id_checked = body.status == VerificationStatus.VERIFIED and body.id_checked
     db.commit()
     return ok({"id": str(org.id), "verification_status": org.verification_status}, _request_id(request))
 

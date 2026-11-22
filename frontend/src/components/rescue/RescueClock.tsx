@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export default function RescueClock({ pickupBy }: { pickupBy: string }) {
+export default function RescueClock({ pickupBy, offsetMs = 0 }: { pickupBy: string; offsetMs?: number }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -8,7 +8,7 @@ export default function RescueClock({ pickupBy }: { pickupBy: string }) {
     return () => window.clearInterval(id);
   }, []);
 
-  const diff = Date.parse(pickupBy) - now;
+  const diff = Date.parse(pickupBy) - now - offsetMs;
 
   let text: string;
   let note: string | null = null;

@@ -32,6 +32,7 @@ export default function ReceiverHistoryPage() {
 
   return (
     <AppShell title="Your rescue history" nav="receiver">
+      <p className="mb-3 text-sm text-muted">Synthetic demo data. Not a food-safety certification.</p>
       <div className="flex flex-col gap-4">
 <label className="text-sm font-semibold">Filter pickup history<select value={status} onChange={e=>setStatus(e.target.value)} className="ml-3"><option value="">All pickups</option>{["CLAIMED","COLLECTED","DELIVERED","CANCELLED","EXPIRED"].map(s=><option value={s} key={s}>{s.toLowerCase()}</option>)}</select></label>
         {historyQuery.isLoading ? (

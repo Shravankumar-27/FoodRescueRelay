@@ -35,6 +35,7 @@ class RescueCreate(BaseModel):
     safety_attestation: bool
     prepared_at: datetime
     pickup_by: datetime
+    hold_hours: dict[FoodCategory, Annotated[float, Field(ge=0.5, le=3)]] = Field(default_factory=dict)
     idempotency_key: str = Field(min_length=8, max_length=64)
     latitude: float | None = None
     longitude: float | None = None

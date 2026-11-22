@@ -11,4 +11,6 @@ def new_uuid() -> uuid.UUID:
 
 def utcnow() -> datetime:
     """Return the current time as a timezone-aware UTC datetime."""
-    return datetime.now(timezone.utc)
+    from app.core.demo_clock import offset
+
+    return datetime.now(timezone.utc) + offset.get()

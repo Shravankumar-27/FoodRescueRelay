@@ -35,7 +35,7 @@ export function recognitionPosterSvg(record: DonationRecognition, theme: PosterT
       : audience === "donor" ? `Confirmed & issued by ${record.receiver_name}` : `Food contributed by ${record.donor_name}`,
     footer: `${record.display_id} · ${new Date(record.issued_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC`,
     badge: "WITH CARE", theme,
-    disclaimer: "Acknowledgement of contribution, not food-safety, tax or legal certification.",
+    disclaimer: "Synthetic demo data. Appreciation only. Not a food-safety certification.",
   });
 }
 

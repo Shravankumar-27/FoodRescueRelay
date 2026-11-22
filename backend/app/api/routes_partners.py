@@ -112,7 +112,7 @@ def conversation(partner_id: uuid.UUID, request: Request, db: DbSession, user: U
     ).values(read_at=now))
     db.commit()
     suggested = ["Can you collect today?", "How many servings can you accept?", "Any dietary or allergen restrictions?", "Please confirm packaging and pickup time.", "Thank you!"] if user.role == "DONOR" else ["Is the food ready for pickup?", "Please confirm ingredients and allergens.", "Please confirm packaging and pickup time.", "We can collect today.", "Thank you!"]
-    return ok({"partner_name": org.name, "messages": list(reversed(data)), "suggested": suggested}, request.state.request_id)
+    return ok({"partner_name": org.name, "partner_id_checked": org.id_checked, "messages": list(reversed(data)), "suggested": suggested}, request.state.request_id)
 
 
 @router.post("/partners/{partner_id}/chat")

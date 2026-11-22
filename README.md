@@ -74,6 +74,7 @@ pip install -r requirements.txt
 
 # 4. Restore the shared database and enable Git synchronization (once per clone)
 python -m app.db.snapshot install
+python -m alembic upgrade head
 
 # 5. Start server
 uvicorn app.main:app --reload --port 8000

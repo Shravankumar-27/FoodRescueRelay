@@ -1,5 +1,7 @@
+import SaveDonationReminder from "../../components/rescue/SaveDonationReminder";
+import { localDateTime, parseSurplus } from "../../lib/smartPaste";
 import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, ChevronRight, ChevronLeft, Clock, Minus, Check, Send, Soup, Drumstick, Wheat, Salad, CakeSlice, Utensils } from "lucide-react";
@@ -29,6 +31,7 @@ type Draft = {
   notes: string;
   prepared: string;
   pickup: string;
+  holdHours?: Record<string, number>;
   locality: string;
   attest: boolean;
 };
@@ -161,15 +164,15 @@ function validateFood(rows: FoodRow[]): Record<number, FoodErr> {
   return errs;
 }
 
-function validateTiming(prepared: string, pickup: string, attest: boolean): Record<string, string> {
+function validateTiming(prepared: string, pickup: string, attest: boolean, now: number): Record<string, string> {
   const errs: Record<string, string> = {};
   const p = new Date(prepared);
   const k = new Date(pickup);
   if (!prepared || Number.isNaN(p.getTime())) errs.prepared = "Enter when the food was prepared.";
-  else if (p.getTime() > Date.now()) errs.prepared = "Preparation time cannot be in the future.";
+  else if (p.getTime() > now) errs.prepared = "Preparation time cannot be in the future.";
   if (!pickup || Number.isNaN(k.getTime())) {
     errs.pickup = "Enter a pickup deadline.";
-  } else if (k.getTime() <= Date.now()) {
+  } else if (k.getTime() <= now) {
     errs.pickup = "The pickup deadline must be in the future.";
   } else if (!Number.isNaN(p.getTime()) && k.getTime() <= p.getTime()) {
     errs.pickup = "The pickup deadline must be after the prepared time.";
@@ -178,8 +181,8 @@ function validateTiming(prepared: string, pickup: string, attest: boolean): Reco
   return errs;
 }
 
-function PickupCountdown({ pickup }: { pickup: string }) {
-  const ms = new Date(pickup).getTime() - Date.now();
+function PickupCountdown({ pickup, now }: { pickup: string; now: number }) {
+  const ms = new Date(pickup).getTime() - now;
   if (ms <= 0) return <span className="text-urgent font-semibold">Deadline passed</span>;
   const totalMins = Math.floor(ms / 60000);
   const hrs = Math.floor(totalMins / 60);
@@ -227,7 +230,7 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
 }
 
 export default function CreateRescuePage() {
-  const { token } = useAuth();
+  const { token, organization } = useAuth();
   const navigate = useNavigate();
   const { toast, error: toastError } = useToast();
 
@@ -235,7 +238,7 @@ export default function CreateRescuePage() {
   const draftWriteFailed = useRef(false);
   if (!idemRef.current) idemRef.current = randomId();
 
-  const [draft] = useState<Partial<Draft> | null>(() => readDraft());
+  const [draft] = useState<Partial<Draft> | null>(() => sessionStorage.getItem(REPEAT_KEY) ? null : readDraft());
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draftSaved, setDraftSaved] = useState(false);
 
@@ -259,6 +262,46 @@ export default function CreateRescuePage() {
   const [attest, setAttest] = useState<boolean>(draft?.attest ?? false);
   const [timingErrs, setTimingErrs] = useState<Record<string, string>>({});
   const [customTime, setCustomTime] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [pasteStatus, setPasteStatus] = useState("");
+  const [holdHours, setHoldHours] = useState<Record<string, number>>(draft?.holdHours ?? {});
+  const holdTimes = useQuery({
+    queryKey: ["hold-times"],
+    queryFn: () => apiRequest<{
+      categories: { category: string; max_hours: number; storage_note: string; allergen_prompt: string; source: string; verified: boolean }[];
+      delivery_minutes: number;
+      guidance: string;
+      clock_offset_ms?: number;
+    }>("/hold-times"),
+  });
+  const clockOffset = holdTimes.data?.clock_offset_ms ?? 0;
+  const now = () => Date.now() + clockOffset;
+  const selectedHours = rows.map(row => {
+    const category = row.food_category || "COOKED_MEAL";
+    return holdHours[category] ?? holdTimes.data?.categories?.find(rule => rule.category === category)?.max_hours;
+  });
+  const hours = Math.min(...selectedHours.map(hour => hour ?? Infinity));
+  const consume = new Date(new Date(prepared).getTime() + hours * 3_600_000);
+  const pickupCap = new Date(consume.getTime() - (holdTimes.data?.delivery_minutes ?? 30) * 60_000);
+  const capped = Number.isFinite(pickupCap.getTime()) && new Date(pickup) > pickupCap;
+  const effectivePickup = capped ? localDateTime(pickupCap) : pickup;
+
+  function applyPaste() {
+    const parsed = parseSurplus(paste, new Date(now()));
+    if (!parsed) {
+      setPasteStatus("Use a quantity, food name, cooked time and pickup time in the example format.");
+      return;
+    }
+    const dietary_type = /\b(?:veg|vegetarian)\b/i.test(parsed.food) && !/\bnon[ -]?veg/i.test(parsed.food) ? "VEG" : "UNKNOWN";
+    setRows([{ ...emptyRow(), name: parsed.food, quantity: String(parsed.quantity), dietary_type, allergen_info_unknown: true }]);
+    setPrepared(parsed.prepared);
+    setPickup(parsed.pickup);
+    setCustomTime(true);
+    setAttest(false);
+    setFoodErrs({});
+    setPasteStatus(`Filled ${parsed.quantity} servings of ${parsed.food}. Review the food, allergens and both dates before posting.`);
+  }
+
 
   useEffect(() => {
     sessionStorage.removeItem(REPEAT_KEY);
@@ -266,7 +309,7 @@ export default function CreateRescuePage() {
 
   // Autosave draft
   useEffect(() => {
-    const d: Draft = { rows, untouched, holding, notes, prepared, pickup, locality, attest };
+    const d: Draft = { rows, untouched, holding, notes, prepared, pickup, holdHours, locality, attest };
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
       draftWriteFailed.current = false;
@@ -277,7 +320,7 @@ export default function CreateRescuePage() {
       if (!draftWriteFailed.current) toastError("Could not save the draft on this device.");
       draftWriteFailed.current = true;
     }
-  }, [rows, untouched, holding, notes, prepared, pickup, locality, attest, toastError]);
+  }, [rows, untouched, holding, notes, prepared, pickup, holdHours, locality, attest, toastError]);
 
   function updateRow(i: number, patch: Partial<FoodRow>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -306,27 +349,32 @@ export default function CreateRescuePage() {
   }
 
   function setPickupPreset(mins: number) {
-    setPickup(toLocalInput(new Date(Date.now() + mins * 60 * 1000)));
+    setPickup(toLocalInput(new Date(now() + mins * 60 * 1000)));
     setCustomTime(false);
   }
 
-  function buildBody() {
-    return {
-      idempotency_key: idemRef.current,
-      food_items: rows.map((r) => ({
+  function foodItems() {
+    return rows.map((r) => ({
         name: r.name.trim(),
         quantity_servings: Number(r.quantity),
         dietary_type: r.dietary_type,
         food_category: r.food_category || "COOKED_MEAL",
         allergens: splitList(r.allergens),
         allergen_info_unknown: r.allergen_info_unknown,
-      })),
+      }));
+  }
+
+  function buildBody() {
+    return {
+      idempotency_key: idemRef.current,
+      food_items: foodItems(),
       untouched_confirmed: untouched === "yes",
       served_or_mixed_with_waste: false,
       handling_type: holding,
       handling_notes: notes.trim() || null,
       prepared_at: toIso(prepared),
       pickup_by: toIso(pickup),
+      hold_hours: holdHours,
       locality: locality.trim() || null,
       safety_attestation: attest,
     };
@@ -334,7 +382,7 @@ export default function CreateRescuePage() {
 
   const create = useMutation({
     mutationFn: () =>
-      apiRequest<RescueDetail & { matching_error?: boolean }>("/rescues", {
+      apiRequest<RescueDetail & { matching_error?: boolean; pickup_was_capped?: boolean }>("/rescues", {
         method: "POST",
         token,
         body: buildBody(),
@@ -342,7 +390,7 @@ export default function CreateRescuePage() {
     meta: { silent: true },
     onSuccess: (data) => {
       localStorage.removeItem(DRAFT_KEY);
-      toast({ variant: "success", title: "Rescue posted!", message: "Finding the best match nearby." });
+      toast({ variant: "success", title: "Rescue posted!", message: data.pickup_was_capped ? "Pickup was capped to leave time for estimated delivery." : "Finding the best match nearby." });
       navigate(`/donor/rescue/${data.id}`);
     },
     onError: (e) => toastError(errorText(e)),
@@ -365,7 +413,7 @@ export default function CreateRescuePage() {
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (step !== 3) return;
-    const errs = validateTiming(prepared, pickup, attest);
+    const errs = validateTiming(prepared, effectivePickup, attest, now());
     setTimingErrs(errs);
     if (Object.keys(errs).length > 0) return;
     create.mutate();
@@ -386,6 +434,17 @@ export default function CreateRescuePage() {
         {/* ── STEP 1: Food ── */}
         {step === 1 && (
           <section className="flex flex-col gap-6" aria-label="Food items">
+            <div className="space-y-2 rounded-2xl border border-border bg-surface p-4">
+              <label htmlFor="smart-paste" className="text-sm font-semibold">Smart paste</label>
+              <textarea id="smart-paste" maxLength={250} value={paste} onChange={e => setPaste(e.target.value)} placeholder="200 plates veg biryani, cooked 9pm, pickup by 11:30" className="w-full rounded-xl border border-border p-3"/>
+              <Button type="button" variant="secondary" onClick={applyPaste}>Fill form for review</Button>
+              {pasteStatus && <p role="status" className="text-sm text-muted">{pasteStatus}</p>}
+            </div>
+            {organization && <SaveDonationReminder org={organization.id} getItems={() => {
+              const errors = validateFood(rows);
+              setFoodErrs(errors);
+              return Object.keys(errors).length ? null : foodItems();
+            }}/>}
             {/* Quick chips */}
             <div>
               <p className="mb-2 text-sm font-semibold text-ink">Quick select (tap to add)</p>
@@ -596,7 +655,7 @@ export default function CreateRescuePage() {
                 maxLength={500}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any extra handling details, special requirements, etc."
+                placeholder="Extra handling details. Leave addresses and contact details out."
                 className="rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               />
               <p className="text-xs text-muted">{notes.length}/500</p>
@@ -617,6 +676,31 @@ export default function CreateRescuePage() {
               error={timingErrs.prepared}
             />
 
+            {!!clockOffset && <Button type="button" variant="secondary" onClick={() => {
+              setPrepared(localDateTime(new Date(now())));
+              setPickupPreset(60);
+            }}>Use current demo time</Button>}
+            <div className="space-y-2 rounded-xl border border-border bg-surface p-4 text-sm">
+              <p>{holdTimes.data?.guidance ?? "Default guidance, not a food-safety certification."}</p>
+              {Number.isFinite(consume.getTime()) && <p className="font-semibold">Consume by {consume.toLocaleString("en-IN")}. Pickup must leave {holdTimes.data?.delivery_minutes} minutes for estimated delivery.</p>}
+              {capped && <p role="alert" className="font-semibold text-warn">Requested pickup is too late. It will be capped at {pickupCap.toLocaleString("en-IN")}.</p>}
+              {holdTimes.isError && <button type="button" className="underline" onClick={() => void holdTimes.refetch()}>Retry hold-time table</button>}
+              {holdTimes.data?.categories && <details><summary className="cursor-pointer font-semibold">Edit hold-time table for this listing</summary>
+                <div className="mt-2 overflow-x-auto"><table className="min-w-[650px] text-left">
+                  <thead><tr>{["Category", "Max hours", "Storage note", "Allergen prompt", "Source", "Verified"].map(label => <th className="p-2" key={label}>{label}</th>)}</tr></thead>
+                  <tbody>{holdTimes.data.categories.map(rule => <tr key={rule.category} className="border-t border-border">
+                    <th className="p-2">{foodLabel(rule.category)}</th>
+                    <td className="p-2"><input aria-label={foodLabel(rule.category) + " max hours"} className="w-20 rounded border border-border p-1" type="number" min={0.5} max={rule.max_hours} step={0.25}
+                      value={holdHours[rule.category] ?? rule.max_hours} onChange={e => {
+                        const value = e.target.valueAsNumber;
+                        if (Number.isFinite(value)) setHoldHours(previous => ({ ...previous, [rule.category]: Math.max(0.5, Math.min(rule.max_hours, value)) }));
+                      }}/></td>
+                    <td className="p-2">{rule.storage_note}</td><td className="p-2">{rule.allergen_prompt}</td>
+                    <td className="p-2">{rule.source}</td><td className="p-2">{rule.verified ? "Yes" : "No"}</td>
+                  </tr>)}</tbody>
+                </table></div>
+              </details>}
+            </div>
             {/* Time presets */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-ink">
@@ -635,7 +719,7 @@ export default function CreateRescuePage() {
                       }
                     }}
                     className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${(p.mins !== null &&
-                        Math.abs(new Date(pickup).getTime() - Date.now() - p.mins * 60000) < 90000 &&
+                        Math.abs(new Date(pickup).getTime() - now() - p.mins * 60000) < 90000 &&
                         !customTime) ||
                         (p.mins === null && customTime)
                         ? "border-primary bg-primaryLight text-primary"
@@ -666,7 +750,7 @@ export default function CreateRescuePage() {
                     {new Date(pickup).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                   </span>
                   {" · "}
-                  <PickupCountdown pickup={pickup} />
+                  <PickupCountdown pickup={effectivePickup} now={now()} />
                 </div>
               )}
 

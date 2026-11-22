@@ -80,6 +80,12 @@ export interface StatusEvent {
 }
 
 export interface RescueDetail {
+  clock_offset_ms?: number;
+  consume_by?: string | null;
+  urgent?: boolean;
+  donor_id_checked?: boolean;
+  on_the_way_at?: string | null;
+  check_in_due?: string | null;
   collected_servings?: number | null;
   id: string;
   display_id: string;
@@ -154,6 +160,11 @@ export interface MatchCandidate {
 }
 
 export interface OfferAvailable {
+  clock_offset_ms?: number;
+  consume_by?: string | null;
+  urgent?: boolean;
+  donor_id_checked?: boolean;
+  volunteer_alert?: boolean;
   portion_only?: boolean;
   suggested_servings?: number;
   donor_name: string;
@@ -257,6 +268,7 @@ export interface AdminRescue {
 }
 
 export interface NearbyReceiver {
+  id_checked?: boolean;
   refrigeration_available?: boolean;
   accepted_dietary_types: string[];
   accepted_food_categories: string[];
@@ -299,6 +311,7 @@ export interface ChatMessage {
 }
 
 export interface ChatData {
+  partner_id_checked?: boolean;
   partner_name?: string;
   messages: ChatMessage[];
   suggested: string[];

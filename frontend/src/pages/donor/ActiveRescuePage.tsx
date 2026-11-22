@@ -1,3 +1,4 @@
+import EventShare from "../../components/impact/EventShare";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
@@ -106,7 +107,7 @@ export default function ActiveRescuePage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <span aria-live="polite"><StatusBadge status={d.status}/></span>
-              {cancellable && <RescueClock pickupBy={d.pickup_by}/>}
+              {cancellable && <RescueClock pickupBy={d.pickup_by} offsetMs={d.clock_offset_ms}/>}
             </div>
           </div>
           <dl className="mt-4 grid grid-cols-1 gap-2 rounded-xl bg-background p-2 min-[470px]:grid-cols-3">
@@ -118,8 +119,11 @@ export default function ActiveRescuePage() {
 
         <Card>
           <h3 className="mb-4 flex items-center gap-2 text-base font-semibold"><Route size={18} className="text-primary"/>Rescue timeline</h3>
+          {d.consume_by && <p className="mb-3 text-sm">Consume by {formatDateTime(d.consume_by)}. {d.urgent && "Urgent."}</p>}
+          <p className="mb-3 text-sm text-muted">Not a food-safety certification.</p>
           <StatusTimeline events={d.status_events ?? []} status={d.status}/>
         </Card>
+        {d.status === "DELIVERED" && d.impact && <EventShare rescueId={d.id}/>}
 
         {release && <Card variant="warn">
           <h3 className="font-semibold">Pickup released</h3>

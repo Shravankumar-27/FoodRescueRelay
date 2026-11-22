@@ -9,13 +9,14 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
 from app.core.errors import AppError
+from app.models.base_types import utcnow
 from app.models.enums import DietaryType, NeedLevel, OrganizationType, VerificationStatus
 from app.models.impact import ImpactRecord
 from app.models.organization import Organization
@@ -23,6 +24,7 @@ from app.models.receiver_capacity import ReceiverCapacity
 from app.models.rescue import Rescue
 from app.services import geo
 from app.services.rescue_helpers import ensure_utc
+from app.services.spoilage import DELIVERY_MINUTES
 from app.services.capacity_service import reserved_servings_by_org
 
 WEIGHTS: dict[str, float] = {
@@ -86,6 +88,8 @@ class RescueInput:
     allergens_unknown: bool = False
     logistics_supported: bool = False
     requires_refrigeration: bool = False
+    consume_by: datetime | None = None
+    radius_km: float = PROXIMITY_HORIZON_KM
 
 
 @dataclass
@@ -188,8 +192,12 @@ def evaluate_candidates(
         travel = geo.travel_minutes(road_km)
         slack = minutes_to_pickup - travel - buffer_minutes
         reasons = _rejection_reasons(rescue, cand, slack)
-        if road_km > PROXIMITY_HORIZON_KM:
-            reasons.append("Outside the 15 km service area")
+        if road_km > rescue.radius_km:
+            reasons.append(f"Outside the {rescue.radius_km:g} km service area")
+        if rescue.consume_by:
+            estimated_delivery = now_utc + timedelta(minutes=travel + buffer_minutes + max(travel, DELIVERY_MINUTES))
+            if estimated_delivery >= ensure_utc(rescue.consume_by):
+                reasons.append("Estimated receiver delivery exceeds consume-by")
         result = CandidateResult(
             receiver_organization_id=cand.receiver_organization_id,
             receiver_name=cand.receiver_name,
@@ -277,7 +285,7 @@ def match_rescue(
     now: datetime | None = None,
 ) -> list[CandidateResult]:
     """Evaluate every receiver for one rescue at ``now`` (UTC by default)."""
-    current = ensure_utc(now) if now is not None else datetime.now(timezone.utc)
+    current = ensure_utc(now) if now is not None else utcnow()
     rescue = db.scalar(
         select(Rescue).where(Rescue.id == rescue_id).options(selectinload(Rescue.food_items))
     )
@@ -309,4 +317,6 @@ def build_rescue_input(rescue: Rescue, items) -> RescueInput:
         allergens_unknown=any(item.allergen_info_unknown for item in items),
         logistics_supported=True,
         requires_refrigeration=rescue.handling_type == "REFRIGERATED",
+        consume_by=rescue.consume_by,
+        radius_km=25 if (rescue.escalation_stage or 0) >= 1 else PROXIMITY_HORIZON_KM,
     )

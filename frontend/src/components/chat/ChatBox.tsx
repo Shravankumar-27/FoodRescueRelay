@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type FormEvent, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Send, ChevronDown, ChevronUp } from "lucide-react";
+import VerifiedBadge from "../partners/VerifiedBadge";
 import Button from "../ui/Button";
 import { useAuth } from "../../features/auth/AuthContext";
 import { apiRequest } from "../../lib/api";
@@ -89,6 +90,7 @@ export default function ChatBox({ rescueId, partnerId, recipientName, defaultOpe
         className="flex min-h-16 w-full items-center justify-between gap-3 px-4 text-left hover:bg-background">
         {title}{isOpen ? <ChevronUp size={18} className="shrink-0"/> : <ChevronDown size={18} className="shrink-0"/>}
       </button>}
+      {partnerId && chatQuery.data?.partner_id_checked !== undefined && <div className="px-4 pb-3"><VerifiedBadge checked={chatQuery.data.partner_id_checked}/></div>}
       {isOpen && (
         <div className="flex flex-col gap-3 border-t border-border p-3 sm:p-4">
           {chatQuery.isError && <Button variant="secondary" size="sm" onClick={() => void chatQuery.refetch()}>Retry messages</Button>}

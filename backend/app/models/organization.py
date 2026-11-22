@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Float, String, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, String, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -45,6 +45,7 @@ class Organization(Base):
     verification_status: Mapped[str] = mapped_column(
         String(32), default=VerificationStatus.PENDING.value
     )
+    id_checked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     locality: Mapped[str] = mapped_column(String(200))
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)

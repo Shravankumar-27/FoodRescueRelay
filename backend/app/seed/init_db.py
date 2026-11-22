@@ -285,10 +285,11 @@ def seed_demo(session) -> None:
 def init_database(*, include_history: bool = True) -> None:
     """Create all tables and seed demo data. Safe to run repeatedly."""
     Base.metadata.create_all(engine)
-    from app.db.upgrade import upgrade_handoff_workflows, upgrade_schema
+    from app.db.upgrade import upgrade_handoff_workflows, upgrade_schema, upgrade_spoilage
     with engine.begin() as connection:
         upgrade_schema(connection)
         upgrade_handoff_workflows(connection)
+        upgrade_spoilage(connection)
     session = SessionLocal()
     try:
         from app.core.config import get_settings

@@ -16,6 +16,7 @@ from app.models.impact import ImpactRecord
 from app.models.offer import MatchOffer
 from app.models.rescue import Rescue
 from app.models.user import User
+from app.services.dispatch_service import advance_expired_offers, check_in_due
 from app.services.handoff_service import verify_pickup_code
 from app.services.logistics_service import accepted_offer, logistics_for, logistics_state
 from app.services.status import lock_rescue, transition_rescue
@@ -76,7 +77,13 @@ def collect_rescue(
     if not 1 <= collected_servings <= rescue.total_servings:
         raise AppError("INVALID_QUANTITY", "Collected servings cannot exceed the posted total.", 422)
 
-    logistics = logistics_for(db, rescue, accepted_offer(db, rescue.id))
+    offer = accepted_offer(db, rescue.id)
+    if (rescue.consume_by is not None and rescue.on_the_way_at is None and offer.claimed_at
+            and ensure_utc(now) >= check_in_due(rescue, offer)):
+        advance_expired_offers(db, now, rescue_id=rescue.id)
+        db.commit()
+        raise AppError("CHECK_IN_LATE", "This claim was released after the check-in deadline.", 409)
+    logistics = logistics_for(db, rescue, offer)
     if any(resource["needs_help"] for resource in logistics_state(logistics).values()):
         raise AppError("LOGISTICS_PENDING", "Arrange the missing containers or transport before confirming collection.", 409)
 

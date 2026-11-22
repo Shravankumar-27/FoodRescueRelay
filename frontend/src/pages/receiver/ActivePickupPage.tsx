@@ -1,3 +1,4 @@
+import VerifiedBadge from "../../components/partners/VerifiedBadge";
 import { useState, type FormEvent } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,7 +47,14 @@ export default function ActivePickupPage() {
     refetchInterval: query => pollInterval(query.state.data?.status),
   });
   const d = detail.data;
-  const logistics = usePickupLogistics(rescueId, d?.status === "CLAIMED");
+  const claimed = d?.status === "CLAIMED";
+  const collectedStatus = d?.status === "COLLECTED";
+  const isDelivered = d?.status === "DELIVERED";
+  const hasPickupActions = claimed || collectedStatus || isDelivered;
+  const deliveredMeals = d?.impact?.delivered_servings ?? 0;
+  const allocationLink = <Link to={`/receiver/planner?rescue=${rescueId}`}
+    className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline">Open allocation planner</Link>;
+  const logistics = usePickupLogistics(rescueId, claimed);
   const ready = logistics.data && Object.values(logistics.data.resources).every(resource => !resource.needs_help);
   const release = useMutation({
     mutationFn: () => apiRequest(`${path}/release`, { method: "POST", token, body: { reason: releaseReason } }),
@@ -55,6 +63,10 @@ export default function ActivePickupPage() {
       notify.success("Pickup released.");
       navigate("/receiver");
     },
+  });
+  const checkIn = useMutation({
+    mutationFn: () => apiRequest(`${path}/on-the-way`, { method: "POST", token }),
+    onSettled: () => void detail.refetch(),
   });
   const change = useMutation({
     mutationFn: ({ action, body }: { action: "collect" | "deliver"; body: unknown }) =>
@@ -102,74 +114,82 @@ export default function ActivePickupPage() {
     <AppShell title="Pickup" nav="receiver" backTo="/receiver">
       {detail.isPending && <Skeleton className="h-72 w-full"/>}
       {detail.isError && <Button variant="secondary" onClick={() => void detail.refetch()}>Retry pickup details</Button>}
-      {d && <div className="space-y-4">
+      {d && <div className="grid gap-4">
         <Card>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">{d.donor_organization_name || d.display_id}</h2>
+              {d.donor_id_checked !== undefined && <VerifiedBadge checked={d.donor_id_checked}/>}
               <p className="text-sm text-muted">{d.display_id} · {d.total_servings} servings · {d.locality}</p>
             </div>
             <StatusBadge status={d.status}/>
           </div>
+          {d.consume_by && <p className="mb-3 text-sm">Consume by {formatDateTime(d.consume_by)}. {d.urgent && "Urgent."}</p>}
+          <p className="mb-3 text-sm text-muted">Not a food-safety certification.</p>
           <StatusTimeline status={d.status} events={d.status_events ?? []}/>
         </Card>
 
-        {d.status === "CLAIMED" && <PickupLogistics rescueId={rescueId} side="receiver"/>}
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            {d.status === "CLAIMED" && <Card>
-              <h3 className="text-lg font-bold">Confirm collection</h3>
-              <p className="mt-1 text-sm">{d.private_address || d.locality} · by {formatDateTime(d.pickup_by)}</p>
-              <form onSubmit={collect} noValidate className="mt-4 space-y-3">
-                <fieldset className="grid gap-2 sm:grid-cols-2">
-                  <legend className="mb-2 text-sm font-semibold">Pickup checks</legend>
-                  {CHECKS.map(label => <label key={label} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm">
-                    <input type="checkbox" checked={checks.includes(label)} onChange={event => setChecks(event.target.checked
-                      ? [...checks, label] : checks.filter(check => check !== label))}/>{label}
-                  </label>)}
-                </fieldset>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border-2 border-primary/40 bg-primaryLight/60 p-2">
-                    <Input label="Pickup code" hint="Ask the donor for the four-digit code." inputMode="numeric"
-                      className="w-full font-mono text-lg font-bold tracking-widest" maxLength={4}
-                      autoComplete="off" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ""))}/>
-                  </div>
-                  <Input label="Servings collected" type="number" min={1} max={d.total_servings}
-                    value={collected} onChange={event => setCollected(event.target.value)}/>
-                </div>
-                {!ready && <p className="text-sm text-warn">{logistics.isPending ? "Checking pickup logistics…" : "Confirm containers and transport above."}</p>}
-                <Button type="submit" disabled={!ready || change.isPending}>Confirm collection</Button>
-              </form>
-              <button type="button" className="mt-3 text-sm font-semibold text-primary underline" onClick={() => setShowRelease(!showRelease)}>Release pickup</button>
-              {showRelease && <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); release.mutate(); }}>
-                <label className="block text-sm font-semibold">Reason<textarea value={releaseReason} onChange={event => setReleaseReason(event.target.value)}
-                  minLength={3} maxLength={300} required className="mt-1 w-full rounded-lg border border-border p-2"/></label>
-                <Button type="submit" variant="danger" disabled={release.isPending || releaseReason.trim().length < 3}>Confirm release</Button>
-              </form>}
-            </Card>}
+        {claimed && d.consume_by && <Card className="flex flex-wrap items-center justify-between gap-3">
+          {d.on_the_way_at ? <p className="text-sm font-semibold">On the way · {formatDateTime(d.on_the_way_at)}</p> : <>
+            {d.check_in_due && <p className="text-sm">Check in by {formatDateTime(d.check_in_due)} to keep this claim.</p>}
+            <Button disabled={checkIn.isPending} onClick={() => checkIn.mutate()}>Mark on the way</Button>
+          </>}
+        </Card>}
+        {claimed && <PickupLogistics rescueId={rescueId} side="receiver"/>}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {claimed && <Card>
+            <h3 className="text-lg font-bold">Confirm collection</h3>
+            <p className="mt-1 text-sm">{d.private_address || d.locality} · by {formatDateTime(d.pickup_by)}</p>
+            <form onSubmit={collect} noValidate className="mt-4 space-y-3">
+              <fieldset className="grid gap-2 sm:grid-cols-2">
+                <legend className="mb-2 text-sm font-semibold">Pickup checks</legend>
+                {CHECKS.map(label => <label key={label} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm">
+                  <input type="checkbox" checked={checks.includes(label)} onChange={event => setChecks(event.target.checked
+                    ? [...checks, label] : checks.filter(check => check !== label))}/>{label}
+                </label>)}
+              </fieldset>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Pickup code" hint="Ask the donor for the four-digit code." inputMode="numeric"
+                  className="w-full bg-primaryLight/60 font-mono font-bold tracking-widest" maxLength={4}
+                  autoComplete="off" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ""))}/>
+                <Input label="Servings collected" type="number" min={1} max={d.total_servings}
+                  value={collected} onChange={event => setCollected(event.target.value)}/>
+              </div>
+              {!ready && <p className="text-sm text-warn">{logistics.isPending ? "Checking pickup logistics…" : "Confirm containers and transport above."}</p>}
+              <Button type="submit" disabled={!ready || change.isPending}>Confirm collection</Button>
+            </form>
+            <button type="button" className="mt-3 text-sm font-semibold text-primary underline" onClick={() => setShowRelease(!showRelease)}>Release pickup</button>
+            {showRelease && <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); release.mutate(); }}>
+              <label className="block text-sm font-semibold">Reason<textarea value={releaseReason} onChange={event => setReleaseReason(event.target.value)}
+                minLength={3} maxLength={300} required className="mt-1 w-full rounded-lg border border-border p-2"/></label>
+              <Button type="submit" variant="danger" disabled={release.isPending || releaseReason.trim().length < 3}>Confirm release</Button>
+            </form>}
+          </Card>}
 
-            {d.status === "COLLECTED" && <Card>
-              <h3 className="text-lg font-bold">Record delivery</h3>
-              <p className="mt-1 text-sm text-muted">{d.collected_servings} servings collected</p>
-              <form onSubmit={deliver} noValidate className="mt-4 space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input label="Servings delivered" type="number" min={0} value={delivered} onChange={event => setDelivered(event.target.value)}/>
-                  <Input label="Servings rejected" type="number" min={0} value={rejected} onChange={event => setRejected(event.target.value)}/>
-                </div>
+          {collectedStatus && <Card>
+            <h3 className="text-lg font-bold">Record delivery</h3>
+            <p className="mt-1 text-sm text-muted">{d.collected_servings} servings collected</p>
+            <form onSubmit={deliver} noValidate className="mt-4 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Servings delivered" type="number" min={0} value={delivered} onChange={event => setDelivered(event.target.value)}/>
+                <Input label="Servings rejected" type="number" min={0} value={rejected} onChange={event => setRejected(event.target.value)}/>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Button type="submit" disabled={change.isPending}>{change.isPending ? "Recording…" : "Confirm delivery"}</Button>
-              </form>
-            </Card>}
+                {allocationLink}
+              </div>
+            </form>
+          </Card>}
 
-            {d.status === "DELIVERED" && <Card variant="fresh">
-              <h3 className="text-xl font-bold">{d.impact?.delivered_servings ?? 0} meals delivered</h3>
-              {!!d.impact?.rejected_servings && <p className="text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}
-              <Link to="/receiver/impact" className="mt-2 inline-block text-sm font-semibold text-primary underline">View impact</Link>
-            </Card>}
-            {["COLLECTED", "DELIVERED"].includes(d.status) && <Link to={`/receiver/planner?rescue=${rescueId}`}
-              className="inline-block text-sm font-semibold text-primary underline">Open allocation planner</Link>}
-            {["CLAIMED", "COLLECTED", "DELIVERED"].includes(d.status) && <ChatBox rescueId={rescueId} recipientName={d.donor_organization_name}/>}
-          </div>
-          <Card>
+          {isDelivered && <Card variant="fresh">
+            <h3 className="text-xl font-bold">{deliveredMeals} meals delivered</h3>
+            {!!d.impact?.rejected_servings && <p className="text-sm text-muted">{d.impact.rejected_servings} servings rejected</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link to="/receiver/impact" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline">View impact</Link>
+              {allocationLink}
+            </div>
+          </Card>}
+          <Card className={hasPickupActions ? "" : "lg:col-span-2"}>
             <h3 className="mb-2 font-bold">Food and handling</h3>
             {d.food_items.map((item, index) => <div key={index} className="border-t border-border py-2 text-sm">
               <p className="font-semibold">{item.name} · {item.quantity_servings} servings</p>
@@ -181,12 +201,13 @@ export default function ActivePickupPage() {
             <div className="mt-3"><SafetyNotice/></div>
           </Card>
         </div>
-        {d.status === "DELIVERED" && <div className="grid items-start gap-4 lg:grid-cols-2">
-          <RecognitionCard rescueId={rescueId} delivered={d.impact?.delivered_servings ?? 0}/>
-          <div className="space-y-4">
-            {!!d.impact?.delivered_servings && <MealFeedback key={rescueId} rescueId={rescueId}/>}
-            <PartnerRating rescueId={rescueId}/>
-          </div>
+        {isDelivered && deliveredMeals > 0 && <div className="grid gap-4 lg:grid-cols-2">
+          <RecognitionCard rescueId={rescueId} delivered={deliveredMeals}/>
+          <MealFeedback key={rescueId} rescueId={rescueId}/>
+        </div>}
+        {hasPickupActions && <div className={isDelivered ? "grid gap-4 lg:grid-cols-2" : ""}>
+          {isDelivered && <PartnerRating rescueId={rescueId}/>}
+          <ChatBox rescueId={rescueId} recipientName={d.donor_organization_name}/>
         </div>}
       </div>}
     </AppShell>

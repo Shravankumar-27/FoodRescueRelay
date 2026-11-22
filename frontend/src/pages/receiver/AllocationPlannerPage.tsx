@@ -32,7 +32,7 @@ function PlanEditor({initial}:{initial:AllocationPlan}) {
   function exportPlan(){
     // Prefix spreadsheet formula starters, including in user-defined group notes.
     const cell=(v:string|number)=>`"${String(v).replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')}"`;
-    const rows=[["Draft allocation",initial.display_id,"Available servings",initial.available_servings],["Group","People planned","Servings planned","Diet / handling notes"],...groups.map(g=>[g.name,g.people,g.servings,g.dietary_notes]),["Unallocated","",remaining,"Planning only; does not confirm distribution."]];
+    const rows=[["Synthetic demo data","Not a food-safety certification."],["Draft allocation",initial.display_id,"Available servings",initial.available_servings],["Group","People planned","Servings planned","Diet / handling notes"],...groups.map(g=>[g.name,g.people,g.servings,g.dietary_notes]),["Unallocated","",remaining,"Planning only; does not confirm distribution."]];
     try {
       const url=URL.createObjectURL(new Blob([rows.map(r=>r.map(cell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`${initial.display_id}-allocation-draft.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch {

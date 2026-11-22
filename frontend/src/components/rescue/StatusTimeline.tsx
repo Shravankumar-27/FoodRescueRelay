@@ -21,13 +21,21 @@ const STEPS: Step[] = [
   { key: "DELIVERED", label: "Delivered", reachedBy: ["DELIVERED"] },
 ];
 
+const EVENT_LABELS: Record<string, string> = {
+  radius_widened_volunteer_alert: "Search widened to 25 km and volunteer alert posted",
+  next_receiver_notified: "Next ranked receiver notified",
+  urgent_window: "Marked urgent",
+  receiver_on_the_way: "Receiver on the way",
+  claim_auto_released: "Claim automatically released after missed check-in",
+};
+
 type StepState = "done" | "current" | "pending";
 
 export default function StatusTimeline({
   events,
   status,
 }: {
-  events: { to_status: string; created_at: string }[];
+  events: { from_status?: string | null; to_status: string; created_at: string; reason?: string | null }[];
   status: string;
 }) {
   // The current step is the last step whose reachedBy list includes the rescue's status.
@@ -42,8 +50,9 @@ export default function StatusTimeline({
   if (stopped) {
     STEPS.forEach((step, index) => { if (events.some(e => step.reachedBy.includes(e.to_status))) currentIndex = Math.max(currentIndex, index); });
   }
-  const timestamps = new Map(events.map(event => [event.to_status, event.created_at]));
-  return (
+  const timestamps = new Map(events.filter(event => event.from_status !== event.to_status).map(event => [event.to_status, event.created_at]));
+  const updates = events.filter(event => event.reason && EVENT_LABELS[event.reason]);
+  return (<>
     <ol className="grid sm:grid-cols-5">
       {STEPS.map((step, index) => {
         const state: StepState =
@@ -80,5 +89,8 @@ export default function StatusTimeline({
       })}
       {stopped && <li className="col-span-full mt-3 rounded-xl bg-accentLight p-3 text-sm font-semibold text-warn">{status === "EXPIRED" ? "Pickup window expired — do not collect" : "Rescue cancelled"}</li>}
     </ol>
-  );
+    {!!updates.length && <ol className="mt-4 space-y-2 border-t border-border pt-3 text-sm" aria-label="Escalation timeline">
+      {updates.map((event, i) => <li key={i}>{EVENT_LABELS[event.reason!]} <time className="text-muted" dateTime={event.created_at}>{formatDateTime(event.created_at)}</time></li>)}
+    </ol>}
+  </>);
 }

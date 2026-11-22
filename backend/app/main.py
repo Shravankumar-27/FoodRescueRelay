@@ -45,6 +45,26 @@ def create_app() -> FastAPI:
         response.headers["X-Request-ID"] = request.state.request_id
         return response
 
+    from app.core.demo_clock import enabled
+    if enabled(settings):
+        from app.db.session import SessionLocal
+        from starlette.concurrency import run_in_threadpool
+        from datetime import timedelta
+        from app.core.demo_clock import clock_minutes, offset
+
+        def read_clock():
+            with SessionLocal() as db:
+                return clock_minutes(db)
+
+        @app.middleware("http")
+        async def demo_clock_middleware(request, call_next):
+            minutes = await run_in_threadpool(read_clock)
+            token = offset.set(timedelta(minutes=minutes))
+            try:
+                return await call_next(request)
+            finally:
+                offset.reset(token)
+
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(

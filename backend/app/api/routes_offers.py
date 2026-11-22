@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import DbSession, require_roles
 from app.api.responses import ok
 from app.core.config import get_settings
+from app.core.demo_clock import offset
 from app.core.errors import AppError
 from app.models.base_types import new_uuid, utcnow
 from app.models.enums import OfferStatus, RescueStatus, UserRole
@@ -108,6 +109,7 @@ def _claim_once(db: Session, offer_id: uuid.UUID, user: User) -> dict[str, Any]:
         raise _claim_failure(db, offer_id, user, now)
 
     rescue_id = rescue.id
+    rescue.on_the_way_at = None
     transition_rescue(db, rescue, RescueStatus.CLAIMED, user.id, reason=CLAIM_REASON)
     db.add(logistics_for(db, rescue, offer))
 
@@ -202,7 +204,10 @@ def list_available(
         items.append({
             "id": str(direct.id) if direct else f"open_{rescue.id}",
             "rescue_id": str(rescue.id), "rescue_display_id": rescue.display_id,
-            "donor_name": donor.name, "donor_id": str(donor.id),
+            "donor_name": donor.name, "donor_id": str(donor.id), "donor_id_checked": donor.id_checked,
+            "clock_offset_ms": int(offset.get().total_seconds() * 1000),
+            "consume_by": iso_utc(rescue.consume_by), "urgent": (rescue.escalation_stage or 0) >= 2,
+            "volunteer_alert": (rescue.escalation_stage or 0) >= 1 and bool(candidates[0].volunteer_servings),
             "trust_score": donor.trust_score,
             "rank_badge": donor.rank_badge,
             "locality": rescue.locality, "total_servings": rescue.total_servings,

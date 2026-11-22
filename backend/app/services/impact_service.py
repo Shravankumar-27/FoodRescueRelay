@@ -26,6 +26,8 @@ from app.services.rescue_helpers import ensure_utc
 
 METHODOLOGY_NOTE = "Meals rescued = receiver-confirmed delivered servings."
 RECENT_LIMIT = 5
+KG_PER_MEAL = 0.4
+CO2E_PER_KG = 2.5
 
 
 def _rescue_denominator(
@@ -113,7 +115,7 @@ def impact_summary(
         start = monday - timedelta(weeks=offset)
         end = start + timedelta(weeks=1)
         meals = sum(row.servings for row in rows if start <= ensure_utc(row.recorded_at) < end)
-        weeks.append({"week": start.strftime("%d %b"), "meals": meals, "co2e_kg": round(meals * .4 * 2.5, 1)})
+        weeks.append({"week": start.strftime("%d %b"), "meals": meals, "co2e_kg": round(meals * KG_PER_MEAL * CO2E_PER_KG, 1)})
     return {
         "reported_people_served": sum(row.people_served for row in people_rows),
         "people_counted_deliveries": len(people_rows),
@@ -127,8 +129,8 @@ def impact_summary(
         "unaccounted_servings": max(0, collected - total_meals - rejected),
         "utilization_rate": round(total_meals / collected, 3) if collected else None,
         "weekly": weeks,
-        "food_kg_estimate": round(total_meals * .4, 1),
-        "co2e_kg_estimate": round(total_meals * .4 * 2.5, 1),
+        "food_kg_estimate": round(total_meals * KG_PER_MEAL, 1),
+        "co2e_kg_estimate": round(total_meals * KG_PER_MEAL * CO2E_PER_KG, 1),
         "household_meal_equivalents": round(total_meals / 4, 1),
         "assumptions": "Illustrative model: one delivered serving = one meal; 0.4 kg per meal; 2.5 kg CO2e per kg food. Household meal equivalents = meals / 4, not unique families. No measured water or methane savings are claimed.",
         "meals_rescued_month": meals_this_month,

@@ -7,6 +7,8 @@ Run forever:   python -m app.workers.dispatch_worker
 from __future__ import annotations
 
 import sys
+from contextlib import nullcontext
+from app.core.demo_clock import enabled, use_demo_clock
 import time
 import logging
 from datetime import datetime
@@ -24,7 +26,8 @@ def run_once(now: datetime | None = None) -> int:
     """Process expired offers in one committed transaction. Returns the count."""
     db = SessionLocal()
     try:
-        count = advance_expired_offers(db, now)
+        with use_demo_clock(db) if enabled(get_settings()) else nullcontext():
+            count = advance_expired_offers(db, now)
         db.commit()
         return count
     except Exception:

@@ -34,6 +34,7 @@ export default function RescueHistoryPage() {
 
   return (
     <AppShell title="Rescue history" nav="donor">
+      <p className="mb-3 text-sm text-muted">Synthetic demo data. Not a food-safety certification.</p>
       <div className="flex flex-col gap-4">
         <section className="harvest-hero"><p className="eyebrow text-white/70">Your contribution journal</p><h2 className="mt-2 text-3xl font-bold">Every handoff has a story.</h2><p className="mt-3 text-sm text-white/80">Review deliveries, revisit a pickup and find your receiver-issued appreciation.</p></section>
         <Card className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_auto_auto]">

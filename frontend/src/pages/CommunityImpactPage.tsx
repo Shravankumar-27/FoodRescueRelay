@@ -23,6 +23,7 @@ export default function CommunityImpactPage({ personal = false }: { personal?: b
     },
   });
   const content = <div className="space-y-5">
+    <p className="rounded-xl bg-primaryLight p-3 text-sm font-semibold">Synthetic demo data. Not a food-safety certification.</p>
     <section className="harvest-hero">
       <Leaf className="mb-3 text-lime-200"/>
       <h2 className="text-3xl font-extrabold">{personal ? "Your impact, meal by meal" : "More meals. Less waste."}</h2>

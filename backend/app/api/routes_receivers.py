@@ -188,6 +188,7 @@ def list_nearby_receivers(
                 "description": cap.description or "",
                 "organization_type": org.organization_type,
                 "verification_status": org.verification_status,
+                "id_checked": org.id_checked,
                 "reliability": org.reliability,
                 "distance_km": round(dist, 2),
                 "available": cap.available if cap else False,

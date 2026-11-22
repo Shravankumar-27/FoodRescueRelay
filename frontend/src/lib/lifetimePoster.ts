@@ -72,7 +72,7 @@ export function lifetimePosterSvg(data: Contribution, theme: PosterTheme) {
       ${text("Issued by RescueRelay · Lifetime platform contribution record",540,1194,18,ink,700)}
       ${text(`As of ${new Date(data.generated_at).toLocaleDateString("en-IN",{timeZone:"UTC"})} UTC · Meal servings, not unique people`,540,1226,16,muted)}
       ${text("Estimates: meals × 0.4 kg food; food kg × 2.5 kg CO₂e. Not measured emissions.",540,1261,15,muted)}
-      ${text("Coins have no cash value. Not food-safety, tax or legal certification.",540,1287,15,muted)}
+      ${text("Synthetic demo data. Appreciation only. Not a food-safety certification.",540,1287,15,muted)}
     </g>
   </svg>`;
 }

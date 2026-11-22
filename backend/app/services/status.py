@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -39,6 +40,7 @@ def transition_rescue(
     to_status: RescueStatus,
     actor_user_id: uuid.UUID | None,
     reason: str | None = None,
+    now: datetime | None = None,
 ) -> None:
     """Move ``rescue`` to ``to_status`` and record a StatusEvent.
 
@@ -48,7 +50,7 @@ def transition_rescue(
     if to_status not in ALLOWED.get(current, frozenset()):
         raise AppError("RESCUE_STATE_CHANGED", f"This rescue is now {current.value.lower()}. Refresh to see its available actions.", 409)
 
-    now = utcnow()
+    now = now if now is not None else utcnow()
     rescue.status = to_status.value
     rescue.updated_at = now
     db.add(

@@ -58,7 +58,7 @@ def _serialize(db, row, rescue=None, impact=None):
         "status": "WITHDRAWN" if row.withdrawn_at else "ISSUED", "demo": True,
         "issuer_role": "ADMIN" if platform_issued else "RECEIVER",
         "disclaimer": ("RescueRelay-issued" if platform_issued else "Receiver-issued")
-        + " appreciation for a confirmed donation. Food feedback is subjective, not a food-safety, legal or tax certification.",
+        + " acknowledgement of a confirmed donation. Synthetic demo data. Appreciation only. Not a food-safety certification.",
     }
 
 

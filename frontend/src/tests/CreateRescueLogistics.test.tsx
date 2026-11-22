@@ -25,7 +25,9 @@ describe("Posting logistics", () => {
       untouched: "yes", holding: "HOT_HELD", packaging: true, delivery: true, attest: true,
       prepared: localDateTime(now - 600000), pickup: localDateTime(now + 3600000),
     }));
-    vi.mocked(apiRequest).mockResolvedValueOnce({ id: "saved" });
+    vi.mocked(apiRequest).mockImplementation(async path => path === "/hold-times"
+      ? { categories: [{ category: "COOKED_MEAL", max_hours: 2.5 }], delivery_minutes: 30 }
+      : { id: "saved" });
     const client = new QueryClient();
     try {
       render(<MemoryRouter><QueryClientProvider client={client}><ToastProvider>
@@ -37,8 +39,9 @@ describe("Posting logistics", () => {
       expect(screen.queryByText(/our team can deliver/i)).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Next" }));
       fireEvent.click(screen.getByRole("button", { name: "Post & find a match" }));
-      await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(1));
-      const [path, options] = vi.mocked(apiRequest).mock.calls[0];
+      const posts = () => vi.mocked(apiRequest).mock.calls.filter(([, options]) => options?.method === "POST");
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      const [path, options] = posts()[0];
       expect(path).toBe("/rescues");
       expect(options?.body).toMatchObject({ handling_type: "HOT_HELD", safety_attestation: true });
       expect(options?.body).not.toHaveProperty("packaging_available");

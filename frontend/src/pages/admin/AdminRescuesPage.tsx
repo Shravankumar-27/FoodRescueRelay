@@ -31,6 +31,7 @@ export default function AdminRescuesPage() {
 
   return (
     <AppShell title="Rescues" nav="admin">
+      <p className="mb-3 text-sm text-muted">Synthetic demo data. Not a food-safety certification.</p>
       <LogisticsQueue/>
       <div className="flex flex-col gap-4">
         {rescuesQuery.isLoading ? (

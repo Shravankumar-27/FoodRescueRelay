@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.demo_clock import offset
 from app.core.errors import AppError
 from app.models.base_types import new_uuid, utcnow
 from app.models.enums import DietaryType, HandlingType, OfferStatus, RescueStatus, UserRole
@@ -20,13 +21,14 @@ from app.models.rescue import FoodItem, Rescue
 from app.models.status_event import StatusEvent
 from app.models.user import User
 from app.schemas.rescue import FoodItemIn, RescueCreate
-from app.services.dispatch_service import start_dispatch
+from app.services.dispatch_service import check_in_due, start_dispatch
 from app.services.rescue_helpers import ensure_utc, new_display_id, seconds_remaining
+from app.services.spoilage import deadlines
 from app.services.status import transition_rescue
 
 logger = logging.getLogger(__name__)
 
-SAFETY_NOTICE = "Check storage, packaging, and allergens before pickup."
+SAFETY_NOTICE = "Check storage, packaging, and allergens before pickup. Not a food-safety certification."
 ALLERGEN_NOTICE = (
     "Allergen information unavailable. Receiver must independently assess suitability."
 )
@@ -155,6 +157,10 @@ def create_rescue(
     pickup_by = ensure_utc(payload.pickup_by)
     total = _validate(payload, current, prepared_at, pickup_by)
 
+    consume_by, pickup_by = deadlines(payload, prepared_at, pickup_by)
+    if pickup_by <= current:
+        raise AppError("HOLD_WINDOW_ENDED", "The default hold window leaves no time for pickup and delivery.", 422)
+
     org = db.get(Organization, donor_user.organization_id, populate_existing=True)
     if org.verification_status != "VERIFIED":
         raise AppError("DONOR_NOT_VERIFIED", "Your organization must be verified before posting surplus.", 403)
@@ -169,6 +175,7 @@ def create_rescue(
         status=RescueStatus.POSTED.value,
         prepared_at=prepared_at,
         pickup_by=pickup_by,
+        consume_by=consume_by,
         handling_type=payload.handling_type.value,
         handling_notes=notes or None,
         untouched_confirmed=payload.untouched_confirmed,
@@ -282,6 +289,7 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
     claimed_offer = _accepted_offer(db, rescue)
     receiver_claimed = (
         _role(viewer) == UserRole.RECEIVER.value
+        and rescue.status in {"CLAIMED", "COLLECTED", "DELIVERED"}
         and claimed_offer is not None
         and claimed_offer.receiver_organization_id == viewer.organization_id
     )
@@ -293,6 +301,10 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         "status": rescue.status,
         "prepared_at": iso_utc(rescue.prepared_at),
         "pickup_by": iso_utc(rescue.pickup_by),
+        "clock_offset_ms": int(offset.get().total_seconds() * 1000),
+        "consume_by": iso_utc(rescue.consume_by),
+        "urgent": (rescue.escalation_stage or 0) >= 2,
+        "on_the_way_at": iso_utc(rescue.on_the_way_at),
         "seconds_remaining": seconds_remaining(rescue.pickup_by, current),
         "handling_type": rescue.handling_type,
         "handling_notes": rescue.handling_notes,
@@ -311,6 +323,7 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
     }
 
     if owner_view or receiver_claimed:
+        data["donor_id_checked"] = bool(donor_org and donor_org.id_checked and donor_org.verification_status == "VERIFIED")
         data["donor_organization_name"] = donor_org.name if donor_org else None
 
     if receiver_claimed:
@@ -320,9 +333,8 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         data["donor_phone"] = donor_org.private_phone if donor_org else None
 
     if owner_view:
-        data["private_address"] = rescue.private_address
-        data["latitude"] = rescue.latitude
-        data["longitude"] = rescue.longitude
+        if is_donor_owner(viewer, rescue) and claimed_offer is not None:
+            data.update(private_address=rescue.private_address, latitude=rescue.latitude, longitude=rescue.longitude)
         data["status_events"] = _status_events(rescue)
         pending = next((offer for offer in rescue.offers if offer.status == "PENDING"), None)
         if pending:
@@ -344,6 +356,8 @@ def rescue_detail(db: Session, rescue: Rescue, viewer: User, now: datetime | Non
         if is_donor_owner(viewer, rescue):
             data["pickup_code"] = get_pickup_code_for_donor(db, rescue)
     elif receiver_claimed:
+        if rescue.consume_by is not None and rescue.status == "CLAIMED" and claimed_offer.claimed_at:
+            data["check_in_due"] = iso_utc(check_in_due(rescue, claimed_offer))
         data["status_events"] = _status_events(rescue, include_release_reason=False)
 
     if (owner_view or receiver_claimed) and rescue.status == RescueStatus.DELIVERED.value and rescue.impact is not None:

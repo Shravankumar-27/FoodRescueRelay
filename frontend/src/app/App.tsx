@@ -14,6 +14,8 @@ const ActiveRescuePage = lazy(() => import("../pages/donor/ActiveRescuePage"));
 const RescueHistoryPage = lazy(() => import("../pages/donor/RescueHistoryPage"));
 const CommunityImpactPage = lazy(() => import("../pages/CommunityImpactPage"));
 const LeaderboardPage = lazy(() => import("../pages/LeaderboardPage"));
+const EventImpactPage = lazy(() => import("../pages/EventImpactPage"));
+const BusinessPage = lazy(() => import("../pages/BusinessPage"));
 const PricingPage = lazy(() => import("../pages/PricingPage"));
 const MessagesPage = lazy(() => import("../pages/MessagesPage"));
 const ContributionPage = lazy(() => import("../pages/ContributionPage"));
@@ -75,6 +77,8 @@ export default function App() {
               <Route path="/contribution" element={<RequireRole roles={["DONOR", "RECEIVER"]}><ContributionPage /></RequireRole>} />
               <Route path="/receiver/planner" element={<RequireRole roles={["RECEIVER"]}><AllocationPlannerPage /></RequireRole>} />
               <Route path="/recognition" element={<RequireRole roles={["DONOR", "RECEIVER"]}><RecognitionPage /></RequireRole>} />
+              <Route path="/events/impact/:token" element={<EventImpactPage />} />
+              <Route path="/business/:section" element={<BusinessPage />} />
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/leaderboard" element={<RequireRole roles={["DONOR", "RECEIVER", "ADMIN"]}><LeaderboardPage /></RequireRole>} />
               <Route path="/messages" element={<RequireRole roles={["DONOR", "RECEIVER"]}><MessagesPage /></RequireRole>} />

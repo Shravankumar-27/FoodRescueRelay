@@ -1,16 +1,45 @@
-import BackButton from "../components/ui/BackButton";
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, HeartHandshake } from "lucide-react";
-import AppShell from "../components/layout/AppShell";
 import Card from "../components/ui/Card";
-import { useAuth } from "../features/auth/AuthContext";
+import { BusinessShell, money, NumberField, PROPOSAL, SYNTHETIC } from "./BusinessShell";
+
+const plans = [
+  { name: "Community", price: 0, description: "Receiving is always free. Post or accept compatible food and track deliveries.", to: "/login", action: "Sign in" },
+  { name: "Donor Pro", price: 999, description: "Weekly templates, event reminders and client impact reports.", to: "#value", action: "Calculate donor ROI" },
+  { name: "Neighbourhood sponsor", price: 4999, description: "Fund an illustrative route and view delivery outcomes.", to: "/business/sponsors", action: "Explore sponsorship" },
+];
+
 export default function PricingPage() {
-  const { user } = useAuth();
-  const [rescues, setRescues] = useState(12);
-  const [minutes, setMinutes] = useState(20);
+  const [weeklySurplus, setWeeklySurplus] = useState(30);
+  const [disposalRate, setDisposalRate] = useState(10);
+  const [meals, setMeals] = useState(60);
+  const [minutes, setMinutes] = useState(45);
   const [hourly, setHourly] = useState(300);
-  const value = rescues * minutes / 60 * hourly;
-  const content = <div className="space-y-5"><section className="harvest-hero"><HeartHandshake className="mb-3 text-amber-200"/><p className="eyebrow text-white/70">A sustainable service, a shared purpose</p><h2 className="mt-2 text-3xl font-bold">Keep food moving.<br/>Fund the coordination.</h2><p className="mt-3 max-w-xl text-sm text-white/80">Free access for community receivers. Donors and sponsors fund the time-saving tools and reliable local operations.</p></section><p className="rounded-xl border border-amber-200 bg-accentLight p-3 text-sm text-warn">Proposed pilot prices. Subscriptions are currently unavailable.</p><div className="grid gap-4 lg:grid-cols-3">{[{name:"Community", price:"Free", sub:"For receivers and occasional donors", features:["Post and accept compatible food", "Private partner chat", "Pickup and delivery tracking", "Basic impact and CSV export"], action:"Sign in", to:"/login"},{name:"Donor Pro", price:"₹999 / month", sub:"Proposed per-location pilot price", features:["Planned: recurring surplus schedules", "Planned: team handoff management", "Planned: monthly reporting pack", "Planned: waste and time analytics"], action:"Explore the value", to:"#value"},{name:"Neighbourhood sponsor", price:"Custom pilot", sub:"For CSR teams and city programmes", features:["Planned: fund collection capacity", "Planned: sponsor a local route", "Planned: aggregate outcome reporting", "Planned: multi-location oversight"], action:"See community outcomes", to:"/community/impact"}].map((plan,i) => <Card key={plan.name} className={i === 1 ? "border-2 border-primary" : ""}><p className="eyebrow text-primary">{plan.name}</p><h3 className="mt-4 text-2xl font-extrabold">{plan.price}</h3><p className="mt-2 min-h-10 text-sm text-muted">{plan.sub}</p><ul className="my-5 space-y-3">{plan.features.map(f => <li key={f} className="flex gap-2 text-sm"><Check size={17} className="shrink-0 text-primary"/>{f}</li>)}</ul>{plan.to.startsWith("#") ? <a className="hero-cta w-full" href={plan.to}>{plan.action}</a> : <Link className="hero-cta w-full" to={plan.to}>{plan.action}</Link>}</Card>)}</div><Card id="value"><h3 className="text-xl font-bold">Would a donor subscription pay for itself?</h3><p className="mt-2 text-sm text-muted">Explore staff coordination time only. This is a planning estimate, not a promise of savings.</p><div className="mt-4 grid gap-4 sm:grid-cols-3">{[{label:"Rescues per month",value:rescues,set:setRescues},{label:"Minutes saved per rescue",value:minutes,set:setMinutes},{label:"Staff cost per hour (₹)",value:hourly,set:setHourly}].map(f => <label key={f.label} className="text-sm font-semibold">{f.label}<input type="number" min="0" max="100000" value={f.value} onChange={e => f.set(Math.max(0,Math.min(100000,Number(e.target.value)||0)))} className="mt-2 min-h-12 w-full rounded-xl border border-border px-3"/></label>)}</div><p className="mt-5 text-2xl font-extrabold text-primary">₹{Math.round(value).toLocaleString()} / month in estimated staff time</p><p className="mt-2 text-sm text-muted">{rescues} × {minutes} minutes ÷ 60 × ₹{hourly}. {value >= 999 ? "This scenario exceeds the proposed ₹999 fee." : "This scenario does not justify the proposed ₹999 fee on staff time alone."}</p></Card><Card><h3 className="font-bold">Who should pay, and why?</h3><div className="mt-3 grid gap-4 md:grid-cols-3"><p className="text-sm leading-relaxed text-muted"><strong className="text-ink">Caterers:</strong> fewer coordination calls, reusable listings, dependable handoffs and an auditable delivery record. Start with event caterers in Madhapur, Hyderabad.</p><p className="text-sm leading-relaxed text-muted"><strong className="text-ink">Receivers:</strong> keep receiving free. Charging per donated meal can discourage collection. Optional team logistics tools could be funded by a sponsor after a proven need.</p><p className="text-sm leading-relaxed text-muted"><strong className="text-ink">Sponsors:</strong> fund transport and neighbourhood coverage, with reports tied to confirmed deliveries. Payment must never buy a better match or trust rating.</p></div><p className="mt-4 text-sm text-muted">Pilot validation: interview 10 caterers and 5 receivers; measure coordination minutes, completion rate, repeat weekly use and cost per delivered meal over four weeks. Ask for a paid pilot only after demonstrating value.</p><p className="mt-3 text-sm text-muted">Market context: <a className="text-primary underline" href="https://www.toogoodtogo.com/en-gb/platform">Too Good To Go's retail tools</a> illustrate operational value; <a className="text-primary underline" href="https://www.food.cloud/get-food">FoodCloud's receiver programme</a> illustrates low/no-cost community access. These examples inform the proposal; they do not validate our pricing.</p></Card></div>;
-  return user ? <AppShell title="Plans & sponsors" nav={user.role === "DONOR" ? "donor" : user.role === "ADMIN" ? "admin" : "receiver"}>{content}</AppShell> : <main className="mx-auto max-w-6xl p-4 sm:p-8"><BackButton/><Link className="mb-5 inline-block font-bold text-primary" to="/home">RescueRelay</Link>{content}</main>;
+  const [price, setPrice] = useState(plans[1].price);
+  const weekly = weeklySurplus * disposalRate + minutes / 60 * hourly;
+
+  return <BusinessShell title="Plans and sponsors">
+    <section className="harvest-hero"><h2 className="text-3xl font-bold">Fund local food rescue coordination</h2><p className="mt-3 text-white/80">Receiving is always free.</p></section>
+    <div className="grid gap-4 lg:grid-cols-3">{plans.map(plan => <Card key={plan.name}>
+      <h3 className="text-xl font-bold">{plan.name}</h3>
+      <p className="mt-2 text-2xl font-extrabold text-primary">{plan.price ? money(plan.price) + " / month" : "Free"}</p>
+      <p className="my-3 text-sm text-muted">{plan.description}</p>
+      <p className="my-3 text-xs text-muted">{PROPOSAL}</p>
+      {plan.to.startsWith("#") ? <a className="hero-cta" href={plan.to}>{plan.action}</a> : <Link className="hero-cta" to={plan.to}>{plan.action}</Link>}
+    </Card>)}</div>
+    <Card id="value"><h2 className="text-xl font-bold">Donor ROI calculator</h2><p className="mt-2 text-sm text-muted">{SYNTHETIC}. Not a food-safety certification.</p>
+      <div className="my-4 grid gap-4 sm:grid-cols-3">
+        <NumberField label="Weekly surplus (kg)" value={weeklySurplus} onChange={setWeeklySurplus}/>
+        <NumberField label="Disposal cost saved per kg (INR)" value={disposalRate} onChange={setDisposalRate}/>
+        <NumberField label="Meals rescued per week" value={meals} onChange={setMeals}/>
+        <NumberField label="Staff minutes saved per week" value={minutes} onChange={setMinutes}/>
+        <NumberField label="Staff cost per hour (INR)" value={hourly} onChange={setHourly}/>
+        <label className="text-sm font-semibold">Donor plan<select className="mt-2 block min-h-12 w-full rounded-xl border border-border px-3" value={price} onChange={e => setPrice(Number(e.target.value))}>{plans.slice(0, 2).map(p => <option key={p.name} value={p.price}>{p.name}</option>)}</select></label>
+      </div>
+      <p className="text-sm text-muted">Weekly value = surplus × disposal savings per kg + staff minutes ÷ 60 × hourly cost. Uses 52 weeks per year. Meals are tracked separately from savings.</p>
+      <table className="mt-4 w-full text-left text-sm"><thead><tr><th>Estimate</th><th>Monthly</th><th>Yearly</th></tr></thead><tbody>
+        {[["Value", money(weekly * 52 / 12), money(weekly * 52)], ["Plan price", money(price), money(price * 12)], ["Value after plan", money(weekly * 52 / 12 - price), money(weekly * 52 - price * 12)], ["Meals rescued", Math.round(meals * 52 / 12), meals * 52]].map(([label, month, year]) => <tr className="border-t border-border" key={label}><th className="py-2">{label}</th><td>{month}</td><td>{year}</td></tr>)}
+      </tbody></table>
+    </Card>
+  </BusinessShell>;
 }

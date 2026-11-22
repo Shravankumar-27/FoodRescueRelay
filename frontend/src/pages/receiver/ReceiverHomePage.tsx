@@ -1,3 +1,4 @@
+import VerifiedBadge from "../../components/partners/VerifiedBadge";
 import HandlingIcon from "../../components/ui/HandlingIcon";
 import Metric from "../../components/ui/Metric";
 import { DIETS, CATEGORIES, foodLabel } from "../../lib/food";
@@ -73,7 +74,7 @@ function OfferCard({
     return () => clearInterval(t);
   }, []);
 
-  const remaining = Math.max(0, Math.ceil((new Date(offer.pickup_by).getTime() - now) / 1000));
+  const remaining = Math.max(0, Math.ceil((new Date(offer.pickup_by).getTime() - now - (offer.clock_offset_ms ?? 0)) / 1000));
   const urgency = urgencyColor(offer.pickup_by);
 
   const allergens = [...new Set(offer.food_items.flatMap(item => item.allergens))];
@@ -83,6 +84,11 @@ function OfferCard({
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="font-bold">{offer.donor_name}</h3>
+        {offer.donor_id_checked !== undefined && <VerifiedBadge checked={offer.donor_id_checked}/>}
+        {offer.volunteer_alert && <p className="mt-1 text-xs font-semibold text-warn">Volunteer pickup alert</p>}
+        {offer.urgent && <p className="mt-1 text-xs font-bold text-urgent">Urgent</p>}
+        {offer.consume_by && <p className="mt-1 text-xs">Consume by {new Date(offer.consume_by).toLocaleString("en-IN")}</p>}
+        <p className="mt-1 text-xs text-muted">Not a food-safety certification.</p>
         <p className="flex items-center gap-1 text-xs text-muted"><MapPin size={14}/>{offer.locality} · {offer.estimated_distance_km} km</p>
       </div>
       <FavoritePartner id={offer.donor_id} name={offer.donor_name}/>
@@ -91,7 +97,7 @@ function OfferCard({
       <span className="flex items-center gap-1.5"><Utensils size={16} className="text-primary"/>
         {offer.portion_only ? `Up to ${offer.suggested_servings} servings` : `${offer.total_servings} servings`}
       </span>
-      <span className="justify-self-end"><RescueClock pickupBy={offer.pickup_by}/></span>
+      <span className="justify-self-end"><RescueClock pickupBy={offer.pickup_by} offsetMs={offer.clock_offset_ms}/></span>
     </div>
     <div>
       <p className="text-sm font-semibold">{offer.food_items.map(item => item.name).join(", ")}</p>
@@ -235,6 +241,12 @@ export default function ReceiverHomePage() {
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Compatible listings" value={offersQuery.isPending ? "—" : offers.length} note="Based on your capacity & diet"/><Metric label="Active pickups" value={activePickups.length} note="Waiting for your next step"/><Metric label="Meals this month" value={impact.data?.meals_rescued_month ?? "—"} note="Confirmed deliveries"/><Metric label="Meals received" value={impact.data?.total_meals_rescued ?? "—"} note="All-time contribution"/></section>
         <div className={`grid items-stretch gap-4 ${activePickups.length ? "lg:grid-cols-2" : ""}`}>
         {activePickups.length > 0 && <Card><h3 className="mb-2 font-bold">Active pickups</h3>{activePickups.map(r => <Link key={r.rescue_id} to={`/receiver/pickup/${r.rescue_id}`} className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><strong>{r.rescue_display_id}</strong><span className="font-semibold text-primary">{r.status === "CLAIMED" ? "Confirm collection" : "Record delivery"}</span></Link>)}</Card>}
+        <div aria-live="polite">
+          {known.some(offer => offer.volunteer_alert || (offer.is_direct_offer && offer.consume_by)) && <Card variant="warn">
+            {known.some(offer => offer.volunteer_alert) && <p className="text-sm font-semibold">Volunteer pickup requested for a nearby rescue.</p>}
+            {known.some(offer => offer.is_direct_offer && offer.consume_by) && <p className="text-sm font-semibold">You have a priority rescue offer.</p>}
+          </Card>}
+        </div>
         {offersQuery.isError && !offlineError && <div role="alert"><p className="mb-2 text-sm text-danger">{offersQuery.error.message}</p><button className="view-toggle" onClick={() => void offersQuery.refetch()}>Retry offers</button></div>}
 
         {offlineError && (
